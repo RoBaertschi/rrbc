@@ -1,5 +1,5 @@
 use std::{
-    env::Args,
+    env::{self, Args},
     error::Error,
     fmt::Display,
     io::{self},
@@ -79,7 +79,7 @@ impl Options {
             print_help(target);
         }
 
-        if args.len() <= 1 || args.len() > 3 {
+        if args.len() < 1 || args.len() > 2 {
             println!("Invalid amount of arguments, expected 1-2 arguments.");
 
             print_help(target);
@@ -130,8 +130,6 @@ impl Options {
         assembly_file.set_extension("s");
         let mut output_file = input_file.clone();
         output_file.set_extension("");
-
-        println!("{:?}", preprocessed_file);
 
         return Self {
             goal,
@@ -189,4 +187,54 @@ impl Options {
 
         Ok(())
     }
+
+    pub fn run_lexer(&self) -> Result<(), DriverExecutionError> {
+        Ok(())
+    }
+
+    pub fn run_parser(&self) -> Result<(), DriverExecutionError> {
+        Ok(())
+    }
+
+    /// Runs the code gen without creating the file.
+    pub fn run_code_gen(&self) -> Result<(), DriverExecutionError> {
+        Ok(())
+    }
+
+    pub fn run_assembly_emission(&self) -> Result<(), DriverExecutionError> {
+        Ok(())
+    }
+}
+
+pub fn run() -> Result<(), DriverExecutionError> {
+    let args = env::args();
+    let opts = Options::parse_args(args);
+
+    opts.run_preprocessor()?;
+
+    opts.run_lexer()?;
+
+    if let Goal::Lex = opts.goal {
+        return Ok(());
+    }
+
+    opts.run_parser()?;
+
+    if let Goal::Parse = opts.goal {
+        return Ok(());
+    }
+
+    opts.run_code_gen()?;
+
+    if let Goal::Codegen = opts.goal {
+        return Ok(());
+    }
+
+    opts.run_assembly_emission()?;
+
+    if let Goal::Compile = opts.goal {
+        opts.run_assembler()?;
+    }
+
+    Ok(())
 }
