@@ -2,11 +2,14 @@ use std::{
     env::{self, Args},
     error::Error,
     fmt::Display,
+    fs,
     io::{self},
     path::PathBuf,
     process::{self, ChildStderr, ChildStdout, Command},
     str::FromStr,
 };
+
+use crate::lexer::{self, LexerError};
 
 #[derive(Debug)]
 pub enum DriverExecutionError {
@@ -16,6 +19,7 @@ pub enum DriverExecutionError {
     PreprocessorNoFile,
     AssemblerFailed(Option<ChildStderr>, Option<ChildStdout>),
     AssemblerNoFile,
+    Lexer(LexerError),
 }
 
 impl Display for DriverExecutionError {
@@ -29,6 +33,12 @@ impl Error for DriverExecutionError {}
 impl From<io::Error> for DriverExecutionError {
     fn from(value: io::Error) -> Self {
         Self::IoError(value)
+    }
+}
+
+impl From<lexer::LexerError> for DriverExecutionError {
+    fn from(value: lexer::LexerError) -> Self {
+        Self::Lexer(value)
     }
 }
 
@@ -49,6 +59,8 @@ pub struct Options {
     preprocessed_file: PathBuf,
     assembly_file: PathBuf,
     output_file: PathBuf,
+
+    lexer: Option<lexer::Lexer>,
 }
 
 fn print_help(file: Option<String>) -> ! {
@@ -137,6 +149,7 @@ impl Options {
             preprocessed_file,
             assembly_file,
             output_file,
+            ..Default::default()
         };
     }
 
@@ -188,7 +201,19 @@ impl Options {
         Ok(())
     }
 
-    pub fn run_lexer(&self) -> Result<(), DriverExecutionError> {
+    pub fn run_lexer(&mut self) -> Result<(), DriverExecutionError> {
+        let input = fs::read_to_string(&self.preprocessed_file)?;
+
+        let lexer = lexer::Lexer::new(input);
+
+        if let Goal::Lex = self.goal {
+            for tok in lexer {
+                tok?;
+            }
+        } else {
+            self.lexer = Some(lexer);
+        }
+
         Ok(())
     }
 
@@ -208,11 +233,18 @@ impl Options {
 
 pub fn run() -> Result<(), DriverExecutionError> {
     let args = env::args();
-    let opts = Options::parse_args(args);
+    let mut opts = Options::parse_args(args);
 
     opts.run_preprocessor()?;
 
     opts.run_lexer()?;
+
+    if let Err(err) = fs::remove_file(&opts.preprocessed_file) {
+        eprintln!(
+            "WARN: Could not remove the file {:?} due to {}, continuing",
+            &opts.preprocessed_file, err
+        );
+    }
 
     if let Goal::Lex = opts.goal {
         return Ok(());
@@ -231,6 +263,7 @@ pub fn run() -> Result<(), DriverExecutionError> {
     }
 
     opts.run_assembly_emission()?;
+    // TODO: Remove the assembly file
 
     if let Goal::Compile = opts.goal {
         opts.run_assembler()?;

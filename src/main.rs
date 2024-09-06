@@ -1,9 +1,13 @@
-use std::error::Error;
+use std::{error::Error, process::ExitCode};
 
 use rbc::driver;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    driver::run()?;
+fn main() -> ExitCode {
+    let result = driver::run();
 
-    Ok(())
+    if let Err(err) = result {
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
 }
