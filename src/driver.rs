@@ -9,7 +9,12 @@ use std::{
     str::FromStr,
 };
 
-use crate::lexer::{self, LexerError};
+use crate::{
+    assembly, ast, codegen,
+    emit::EmitAsm,
+    lexer::{self, LexerError},
+    parser::{self, ParserError},
+};
 
 #[derive(Debug)]
 pub enum DriverExecutionError {
@@ -20,6 +25,7 @@ pub enum DriverExecutionError {
     AssemblerFailed(Option<ChildStderr>, Option<ChildStdout>),
     AssemblerNoFile,
     Lexer(LexerError),
+    Parser(ParserError),
 }
 
 impl Display for DriverExecutionError {
@@ -42,8 +48,14 @@ impl From<lexer::LexerError> for DriverExecutionError {
     }
 }
 
+impl From<ParserError> for DriverExecutionError {
+    fn from(value: ParserError) -> Self {
+        Self::Parser(value)
+    }
+}
+
 #[derive(Default)]
-pub enum Goal {
+pub enum Stage {
     #[default]
     Compile,
     Lex,
@@ -54,7 +66,7 @@ pub enum Goal {
 
 #[derive(Default)]
 pub struct Options {
-    goal: Goal,
+    stage: Stage,
     input_file: PathBuf,
     preprocessed_file: PathBuf,
     assembly_file: PathBuf,
@@ -71,12 +83,12 @@ fn print_help(file: Option<String>) -> ! {
     process::exit(1)
 }
 
-fn is_flag(string: &str) -> Option<Goal> {
+fn is_flag(string: &str) -> Option<Stage> {
     match string {
-        "--lex" => Some(Goal::Lex),
-        "--parse" => Some(Goal::Parse),
-        "--codegen" => Some(Goal::Codegen),
-        "-S" => Some(Goal::Assembly),
+        "--lex" => Some(Stage::Lex),
+        "--parse" => Some(Stage::Parse),
+        "--codegen" => Some(Stage::Codegen),
+        "-S" => Some(Stage::Assembly),
         _ => None,
     }
 }
@@ -97,7 +109,7 @@ impl Options {
             print_help(target);
         }
 
-        let mut goal: Goal = Default::default();
+        let mut goal: Stage = Default::default();
         let mut file_path: Option<PathBuf> = None;
 
         for arg in args {
@@ -144,7 +156,7 @@ impl Options {
         output_file.set_extension("");
 
         return Self {
-            goal,
+            stage: goal,
             input_file,
             preprocessed_file,
             assembly_file,
@@ -206,7 +218,7 @@ impl Options {
 
         let lexer = lexer::Lexer::new(input);
 
-        if let Goal::Lex = self.goal {
+        if let Stage::Lex = self.stage {
             for tok in lexer {
                 tok?;
             }
@@ -217,16 +229,39 @@ impl Options {
         Ok(())
     }
 
-    pub fn run_parser(&self) -> Result<(), DriverExecutionError> {
-        Ok(())
+    pub fn run_parser(&mut self) -> Result<ast::Program, DriverExecutionError> {
+        let lexer = self.lexer.take().unwrap();
+
+        let mut parser = parser::Parser::try_build(lexer)?;
+        let program = parser.parse_program()?;
+
+        if let Stage::Parse = self.stage {
+            println!("{:#?}", program);
+        }
+
+        Ok(program)
     }
 
     /// Runs the code gen without creating the file.
-    pub fn run_code_gen(&self) -> Result<(), DriverExecutionError> {
-        Ok(())
+    pub fn run_code_gen(
+        &self,
+        ast_program: ast::Program,
+    ) -> Result<assembly::Program, DriverExecutionError> {
+        let program = codegen::code_generation(ast_program);
+
+        if let Stage::Codegen = self.stage {
+            println!("{:#?}", program);
+        }
+
+        Ok(program)
     }
 
-    pub fn run_assembly_emission(&self) -> Result<(), DriverExecutionError> {
+    pub fn run_assembly_emission(
+        &self,
+        program: assembly::Program,
+    ) -> Result<(), DriverExecutionError> {
+        fs::write(&self.assembly_file, program.emit(0))?;
+
         Ok(())
     }
 }
@@ -246,27 +281,34 @@ pub fn run() -> Result<(), DriverExecutionError> {
         );
     }
 
-    if let Goal::Lex = opts.goal {
+    if let Stage::Lex = opts.stage {
         return Ok(());
     }
 
-    opts.run_parser()?;
+    let program = opts.run_parser()?;
 
-    if let Goal::Parse = opts.goal {
+    if let Stage::Parse = opts.stage {
         return Ok(());
     }
 
-    opts.run_code_gen()?;
+    let program = opts.run_code_gen(program)?;
 
-    if let Goal::Codegen = opts.goal {
+    if let Stage::Codegen = opts.stage {
         return Ok(());
     }
 
-    opts.run_assembly_emission()?;
+    opts.run_assembly_emission(program)?;
     // TODO: Remove the assembly file
 
-    if let Goal::Compile = opts.goal {
+    if let Stage::Compile = opts.stage {
         opts.run_assembler()?;
+
+        if let Err(err) = fs::remove_file(&opts.assembly_file) {
+            eprintln!(
+                "WARN: Could not remove the file {:?} due to {}, finishing...",
+                &opts.assembly_file, err
+            )
+        }
     }
 
     Ok(())

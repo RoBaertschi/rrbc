@@ -5,7 +5,7 @@ pub enum LexerError {
     IdentifierStartedWithNumber,
 }
 
-#[derive(Eq, PartialEq, PartialOrd, Ord, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone)]
 pub enum Token {
     Eof,
     Identifier(String),
@@ -156,6 +156,7 @@ impl Iterator for Lexer {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
