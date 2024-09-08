@@ -19,6 +19,7 @@ pub enum ParserError {
     LexerError(LexerError),
     CouldNotParseStatement,
     NoPrefixFunction(Token),
+    NoUnaryOperatorFound(Token),
 }
 
 impl From<LexerError> for ParserError {
@@ -50,6 +51,12 @@ impl Parser {
         };
 
         parser.register_prefix(mem::discriminant(&Token::Constant(1)), Self::parse_constant);
+        parser.register_prefix(mem::discriminant(&Token::Minus), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&Token::Tilde), Self::parse_unary);
+        parser.register_prefix(
+            mem::discriminant(&Token::OpenParen),
+            Self::parse_grouped_expression,
+        );
 
         parser.next_token()?;
         parser.next_token()?;
@@ -106,6 +113,38 @@ impl Parser {
             expected: Token::Constant(0),
             actual: self.cur_token.clone(),
         })
+    }
+
+    fn parse_unary(&mut self) -> Result<ast::Expression, ParserError> {
+        match &self.cur_token {
+            Token::Minus => {
+                self.next_token()?;
+                let expr = self.parse_expression()?;
+                Ok(ast::Expression::Unary(
+                    ast::UnaryOperator::Negate,
+                    Box::new(expr),
+                ))
+            }
+            Token::Tilde => {
+                self.next_token()?;
+                let expr = self.parse_expression()?;
+                Ok(ast::Expression::Unary(
+                    ast::UnaryOperator::Complement,
+                    Box::new(expr),
+                ))
+            }
+            _ => Err(ParserError::NoUnaryOperatorFound(self.cur_token.clone())),
+        }
+    }
+
+    fn parse_grouped_expression(&mut self) -> Result<ast::Expression, ParserError> {
+        self.next_token()?;
+
+        let expr = self.parse_expression()?;
+
+        self.expect_peek(Token::CloseParen)?;
+
+        Ok(expr)
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {

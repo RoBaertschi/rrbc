@@ -14,6 +14,7 @@ use crate::{
     emit::EmitAsm,
     lexer::{self, LexerError},
     parser::{self, ParserError},
+    tackler, tacky,
 };
 
 #[derive(Debug)]
@@ -60,6 +61,7 @@ pub enum Stage {
     Compile,
     Lex,
     Parse,
+    Tacky,
     Codegen,
     Assembly,
 }
@@ -89,6 +91,7 @@ fn is_flag(string: &str) -> Option<Stage> {
         "--parse" => Some(Stage::Parse),
         "--codegen" => Some(Stage::Codegen),
         "-S" => Some(Stage::Assembly),
+        "--tacky" => Some(Stage::Tacky),
         _ => None,
     }
 }
@@ -245,7 +248,7 @@ impl Options {
     /// Runs the code gen without creating the file.
     pub fn run_code_gen(
         &self,
-        ast_program: ast::Program,
+        ast_program: tacky::Program,
     ) -> Result<assembly::Program, DriverExecutionError> {
         let program = codegen::code_generation(ast_program);
 
@@ -291,6 +294,13 @@ pub fn run() -> Result<(), DriverExecutionError> {
         return Ok(());
     }
 
+    let program = tackler::emit_tacky_program(program);
+
+    if let Stage::Tacky = opts.stage {
+        println!("{:#?}", program);
+        return Ok(());
+    }
+
     let program = opts.run_code_gen(program)?;
 
     if let Stage::Codegen = opts.stage {
@@ -298,7 +308,6 @@ pub fn run() -> Result<(), DriverExecutionError> {
     }
 
     opts.run_assembly_emission(program)?;
-    // TODO: Remove the assembly file
 
     if let Stage::Compile = opts.stage {
         opts.run_assembler()?;

@@ -5,3 +5,6 @@ pub mod driver;
 pub mod emit;
 pub mod lexer;
 pub mod parser;
+pub mod tackler;
+pub mod tacky;
+pub mod unique_id;

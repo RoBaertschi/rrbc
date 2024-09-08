@@ -1,18 +1,29 @@
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instruction {
     Mov { src: Operand, dst: Operand },
-    Ret(),
+    Unary(UnaryOperator, Operand),
+    AllocateStack(u32),
+    Ret,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum UnaryOperator {
+    Neg,
+    Not,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Operand {
     Register(Register),
     Imm(i32),
+    Pseudo(String),
+    Stack(u32),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
-    EAX,
+    AX,
+    R10,
 }
 
 #[derive(Debug)]

@@ -1,45 +1,21 @@
-use crate::{assembly, ast};
+use crate::{assembly, ast, tacky};
 
-pub fn code_generation(program: ast::Program) -> assembly::Program {
-    let instructions = cg_statement(program.function_definition.body);
+pub mod pass1;
+pub mod pass2;
+pub mod pass3;
 
-    assembly::Program(assembly::FunctionDefinition {
-        name: program.function_definition.name,
-        instructions,
-    })
-}
-
-fn cg_statement(stat: ast::Statement) -> Vec<assembly::Instruction> {
-    match stat {
-        ast::Statement::Return(expr) => cg_return_stat(expr),
-    }
-}
-
-fn cg_return_stat(expr: ast::Expression) -> Vec<assembly::Instruction> {
-    let mut instructions = cg_expression(expr, assembly::Register::EAX);
-
-    instructions.push(assembly::Instruction::Ret());
-
-    instructions
-}
-
-fn cg_expression(
-    expr: ast::Expression,
-    register: assembly::Register,
-) -> Vec<assembly::Instruction> {
-    match expr {
-        ast::Expression::Constant(val) => vec![assembly::Instruction::Mov {
-            src: assembly::Operand::Imm(val),
-            dst: assembly::Operand::Register(register),
-        }],
-    }
+pub fn code_generation(program: tacky::Program) -> assembly::Program {
+    let program = pass1::code_generation(program);
+    let (program, stack_offset) = pass2::run_second_pass(program);
+    let program = pass3::run_third_pass(program, stack_offset);
+    program
 }
 
 #[cfg(test)]
 mod tests {
     use assembly::Instruction;
 
-    use crate::{lexer::Lexer, parser::Parser};
+    use crate::{lexer::Lexer, parser::Parser, tackler};
 
     use super::*;
 
@@ -59,6 +35,8 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
+        let program = tackler::emit_tacky_program(program);
+
         let program = code_generation(program);
 
         assert_eq!(program.0.name, "main");
@@ -67,9 +45,9 @@ mod tests {
             vec![
                 Instruction::Mov {
                     src: assembly::Operand::Imm(2),
-                    dst: assembly::Operand::Register(assembly::Register::EAX)
+                    dst: assembly::Operand::Register(assembly::Register::AX)
                 },
-                Instruction::Ret(),
+                Instruction::Ret,
             ]
         )
     }

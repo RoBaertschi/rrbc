@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub enum LexerError {
-    UnknownCharacter(u8),
+    UnknownCharacter(char),
     InvalidNumber(String),
     IdentifierStartedWithNumber,
 }
@@ -10,14 +10,21 @@ pub enum Token {
     Eof,
     Identifier(String),
     Constant(i32),
-    KWInt,
-    KWReturn,
-    KWVoid,
     OpenParen,
     CloseParen,
     OpenBrace,
     CloseBrace,
     Semicolon,
+
+    // Operator
+    Minus,     // -
+    Decrement, // --
+    Tilde,     // ~
+
+    // Keywords
+    KWInt,
+    KWReturn,
+    KWVoid,
 }
 
 impl Token {
@@ -51,6 +58,10 @@ impl Lexer {
 
         lexer.read_char();
         lexer
+    }
+
+    fn peek_char(&self) -> u8 {
+        self.input.as_bytes()[self.read_pos]
     }
 
     fn is_digit(&self) -> bool {
@@ -125,6 +136,15 @@ impl Lexer {
             b'{' => Token::OpenBrace,
             b'}' => Token::CloseBrace,
             b';' => Token::Semicolon,
+            b'~' => Token::Tilde,
+            b'-' => {
+                if self.peek_char() == b'-' {
+                    self.next_token()?;
+                    Token::Decrement
+                } else {
+                    Token::Minus
+                }
+            }
             0 => return Ok(Token::Eof),
             _ => {
                 if self.is_digit() {
@@ -133,7 +153,7 @@ impl Lexer {
                     return Ok(self.read_identifier());
                 }
 
-                return Err(LexerError::UnknownCharacter(self.ch));
+                return Err(LexerError::UnknownCharacter(char::from(self.ch)));
             }
         };
 
