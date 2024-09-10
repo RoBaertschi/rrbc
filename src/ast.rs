@@ -1,4 +1,4 @@
-//use crate::tacky;
+use crate::tacky;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum Expression {
@@ -16,20 +16,32 @@ pub enum BinaryOperator {
     Reminder,
 }
 
+impl BinaryOperator {
+    pub fn to_tacky(&self) -> tacky::BinaryOperator {
+        match self {
+            BinaryOperator::Add => tacky::BinaryOperator::Add,
+            BinaryOperator::Subtract => tacky::BinaryOperator::Subtract,
+            BinaryOperator::Multiply => tacky::BinaryOperator::Multiply,
+            BinaryOperator::Divide => tacky::BinaryOperator::Divide,
+            BinaryOperator::Reminder => tacky::BinaryOperator::Remainder,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum UnaryOperator {
     Complement,
     Negate,
 }
 
-//impl UnaryOperator {
-//    pub fn to_tacky(&self) -> tacky::UnaryOperator {
-//        match self {
-//            UnaryOperator::Complement => tacky::UnaryOperator::Complement,
-//            UnaryOperator::Negate => tacky::UnaryOperator::Negate,
-//        }
-//    }
-//}
+impl UnaryOperator {
+    pub fn to_tacky(&self) -> tacky::UnaryOperator {
+        match self {
+            UnaryOperator::Complement => tacky::UnaryOperator::Complement,
+            UnaryOperator::Negate => tacky::UnaryOperator::Negate,
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum Statement {

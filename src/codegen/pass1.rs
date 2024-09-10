@@ -36,5 +36,23 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             },
             assembly::Instruction::Unary(operator.to_assembly(), assembly::Operand::Pseudo(dst.0)),
         ],
+        tacky::Instruction::Binary { op, lhs, rhs, dst } => match op {
+            tacky::BinaryOperator::Add => todo!(),
+            tacky::BinaryOperator::Subtract => todo!(),
+            tacky::BinaryOperator::Multiply => todo!(),
+            tacky::BinaryOperator::Divide => vec![
+                assembly::Instruction::Mov {
+                    src: lhs.to_operand(),
+                    dst: assembly::Operand::Register(Register::AX),
+                },
+                assembly::Instruction::Cdq,
+                assembly::Instruction::Idiv(rhs.to_operand()),
+                assembly::Instruction::Mov {
+                    src: assembly::Operand::Register(Register::AX),
+                    dst: assembly::Operand::Pseudo(dst.0),
+                },
+            ],
+            tacky::BinaryOperator::Remainder => todo!(),
+        },
     }
 }

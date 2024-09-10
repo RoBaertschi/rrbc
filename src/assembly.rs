@@ -2,6 +2,9 @@
 pub enum Instruction {
     Mov { src: Operand, dst: Operand },
     Unary(UnaryOperator, Operand),
+    Binary(BinaryOperator, Operand, Operand),
+    Idiv(Operand),
+    Cdq,
     AllocateStack(u32),
     Ret,
 }
@@ -10,6 +13,13 @@ pub enum Instruction {
 pub enum UnaryOperator {
     Neg,
     Not,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BinaryOperator {
+    Add,
+    Sub,
+    Mult,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -23,7 +33,9 @@ pub enum Operand {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
     AX,
+    DX,
     R10,
+    R11,
 }
 
 #[derive(Debug)]

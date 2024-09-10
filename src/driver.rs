@@ -11,11 +11,9 @@ use std::{
 
 use crate::{
     ast,
-    //tackler, tacky,
-    //assembly, ast, codegen,
-    //emit::EmitAsm,
     lexer::{self, LexerError},
     parser::{self, ParserError},
+    tackler, tacky,
 };
 
 #[derive(Debug)]
@@ -295,13 +293,13 @@ pub fn run() -> Result<(), DriverExecutionError> {
         return Ok(());
     }
 
-    //let program = tackler::emit_tacky_program(program);
+    let program = tackler::emit_tacky_program(program);
 
-    //if let Stage::Tacky = opts.stage {
-    //    println!("{:#?}", program);
-    //    return Ok(());
-    //}
-    //
+    if let Stage::Tacky = opts.stage {
+        println!("{:#?}", program);
+        return Ok(());
+    }
+
     //let program = opts.run_code_gen(program)?;
     //
     //if let Stage::Codegen = opts.stage {

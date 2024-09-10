@@ -1,10 +1,10 @@
-//pub mod assembly;
+pub mod assembly;
 pub mod ast;
-//pub mod codegen;
+pub mod codegen;
 pub mod driver;
 //pub mod emit;
 pub mod lexer;
 pub mod parser;
-//pub mod tackler;
-//pub mod tacky;
-//pub mod unique_id;
+pub mod tackler;
+pub mod tacky;
+pub mod unique_id;
