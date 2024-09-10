@@ -18,6 +18,10 @@ pub enum Token {
 
     // Operator
     Minus,     // -
+    Plus,      // +
+    Asterisk,  // *
+    Slash,     // /
+    Percent,   // %
     Decrement, // --
     Tilde,     // ~
 
@@ -137,6 +141,10 @@ impl Lexer {
             b'}' => Token::CloseBrace,
             b';' => Token::Semicolon,
             b'~' => Token::Tilde,
+            b'+' => Token::Plus,
+            b'*' => Token::Asterisk,
+            b'/' => Token::Slash,
+            b'%' => Token::Percent,
             b'-' => {
                 if self.peek_char() == b'-' {
                     self.next_token()?;

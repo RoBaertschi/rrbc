@@ -4,9 +4,30 @@ use std::{
 };
 
 use crate::{
-    ast::{self},
+    ast::{self, BinaryOperator, Expression},
     lexer::{Lexer, LexerError, Token},
 };
+
+#[derive(PartialEq, PartialOrd)]
+enum Precedence {
+    Lowest = 0,
+    Sum = 1,
+    Product = 2,
+    Prefix = 3,
+}
+
+impl Precedence {
+    pub fn from_token(token: &Token) -> Option<Self> {
+        Some(match token {
+            Token::Plus => Self::Sum,
+            Token::Minus => Self::Sum,
+            Token::Asterisk => Self::Product,
+            Token::Slash => Self::Product,
+            Token::Percent => Self::Product,
+            _ => return None,
+        })
+    }
+}
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -20,6 +41,7 @@ pub enum ParserError {
     CouldNotParseStatement,
     NoPrefixFunction(Token),
     NoUnaryOperatorFound(Token),
+    NoBinaryOperatorFound(Token),
 }
 
 impl From<LexerError> for ParserError {
@@ -58,6 +80,27 @@ impl Parser {
             Self::parse_grouped_expression,
         );
 
+        parser.register_infix(
+            mem::discriminant(&Token::Plus),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Minus),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Asterisk),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Slash),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Percent),
+            Self::parse_binary_expression,
+        );
+
         parser.next_token()?;
         parser.next_token()?;
 
@@ -74,7 +117,7 @@ impl Parser {
         })
     }
 
-    fn parse_expression(&mut self) -> Result<ast::Expression, ParserError> {
+    fn parse_expression(&mut self, precedence: Precedence) -> Result<ast::Expression, ParserError> {
         let prefix = self
             .prefix_functions
             .get(&mem::discriminant(&self.cur_token));
@@ -83,10 +126,11 @@ impl Parser {
             Some(prefix) => {
                 let mut left_exp = prefix(self)?;
 
-                while !self.peek_token_is(&Token::Semicolon) {
+                while !self.peek_token_is(&Token::Semicolon) && precedence < self.peek_precedence()
+                {
                     if self
                         .infix_functions
-                        .contains_key(&mem::discriminant(&self.cur_token))
+                        .contains_key(&mem::discriminant(&self.peek_token))
                     {
                         self.next_token()?;
                         left_exp = self
@@ -104,6 +148,26 @@ impl Parser {
         }
     }
 
+    fn parse_binary_expression(
+        &mut self,
+        left: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        let bin = match &self.cur_token {
+            Token::Plus => BinaryOperator::Add,
+            Token::Minus => BinaryOperator::Subtract,
+            Token::Asterisk => BinaryOperator::Multiply,
+            Token::Slash => BinaryOperator::Divide,
+            Token::Percent => BinaryOperator::Reminder,
+            tok => return Err(ParserError::NoBinaryOperatorFound(tok.clone())),
+        };
+
+        let precedence = self.cur_precedence();
+        self.next_token()?;
+        let right = self.parse_expression(precedence)?;
+
+        Ok(Expression::Binary(bin, Box::new(left), Box::new(right)))
+    }
+
     fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
         if let Token::Constant(val) = &self.cur_token {
             return Ok(ast::Expression::Constant(*val));
@@ -119,7 +183,7 @@ impl Parser {
         match &self.cur_token {
             Token::Minus => {
                 self.next_token()?;
-                let expr = self.parse_expression()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary(
                     ast::UnaryOperator::Negate,
                     Box::new(expr),
@@ -127,7 +191,7 @@ impl Parser {
             }
             Token::Tilde => {
                 self.next_token()?;
-                let expr = self.parse_expression()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary(
                     ast::UnaryOperator::Complement,
                     Box::new(expr),
@@ -140,7 +204,7 @@ impl Parser {
     fn parse_grouped_expression(&mut self) -> Result<ast::Expression, ParserError> {
         self.next_token()?;
 
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
 
         self.expect_peek(Token::CloseParen)?;
 
@@ -149,17 +213,19 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match self.cur_token {
-            Token::KWReturn => {
-                self.next_token()?;
-
-                let expr = self.parse_expression()?;
-
-                self.expect_peek(Token::Semicolon)?;
-
-                Ok(ast::Statement::Return(expr))
-            }
+            Token::KWReturn => self.parse_return_statement(),
             _ => Err(ParserError::CouldNotParseStatement),
         }
+    }
+
+    fn parse_return_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.next_token()?;
+
+        let expr = self.parse_expression(Precedence::Lowest)?;
+
+        self.expect_peek(Token::Semicolon)?;
+
+        Ok(ast::Statement::Return(expr))
     }
 
     fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
@@ -226,6 +292,14 @@ impl Parser {
     fn peek_token_is(&self, token: &Token) -> bool {
         mem::discriminant(&self.peek_token) == mem::discriminant(token)
     }
+
+    fn peek_precedence(&self) -> Precedence {
+        Precedence::from_token(&self.peek_token).unwrap_or(Precedence::Lowest)
+    }
+
+    fn cur_precedence(&self) -> Precedence {
+        Precedence::from_token(&self.cur_token).unwrap_or(Precedence::Lowest)
+    }
 }
 
 #[cfg(test)]
@@ -233,11 +307,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_function() {
+    fn test_precedence1() {
         let lexer = Lexer::new(
             r"
         int main(void) {
-            return 2;
+            return -2 * 2;
         }
         "
             .to_owned(),
@@ -251,7 +325,118 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(ast::Expression::Constant(2)),
+            ast::Statement::Return(Expression::Binary(
+                BinaryOperator::Multiply,
+                Box::new(Expression::Unary(
+                    ast::UnaryOperator::Negate,
+                    Box::new(Expression::Constant(2))
+                ),),
+                Box::new(Expression::Constant(2))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_precedence2() {
+        let lexer = Lexer::new(
+            r"
+        int main(void) {
+            return -2 * (~2);
+        }
+        "
+            .to_owned(),
+        );
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser
+            .parse_program()
+            .expect("the program should be parsed successfully");
+
+        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(
+            program.function_definition.body,
+            ast::Statement::Return(Expression::Binary(
+                BinaryOperator::Multiply,
+                Box::new(Expression::Unary(
+                    ast::UnaryOperator::Negate,
+                    Box::new(Expression::Constant(2))
+                ),),
+                Box::new(Expression::Unary(
+                    ast::UnaryOperator::Complement,
+                    Box::new(Expression::Constant(2))
+                ))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_precedence3() {
+        let lexer = Lexer::new(
+            r"
+        int main(void) {
+            return -2 * (~2 * 4);
+        }
+        "
+            .to_owned(),
+        );
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser
+            .parse_program()
+            .expect("the program should be parsed successfully");
+
+        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(
+            program.function_definition.body,
+            ast::Statement::Return(Expression::Binary(
+                BinaryOperator::Multiply,
+                Box::new(Expression::Unary(
+                    ast::UnaryOperator::Negate,
+                    Box::new(Expression::Constant(2))
+                ),),
+                Box::new(Expression::Binary(
+                    BinaryOperator::Multiply,
+                    Box::new(Expression::Unary(
+                        ast::UnaryOperator::Complement,
+                        Box::new(Expression::Constant(2))
+                    )),
+                    Box::new(Expression::Constant(4))
+                ))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_precedence4() {
+        let lexer = Lexer::new(
+            r"
+        int main(void) {
+            return (3-2) * (~2);
+        }
+        "
+            .to_owned(),
+        );
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser
+            .parse_program()
+            .expect("the program should be parsed successfully");
+
+        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(
+            program.function_definition.body,
+            ast::Statement::Return(Expression::Binary(
+                BinaryOperator::Multiply,
+                Box::new(Expression::Binary(
+                    BinaryOperator::Subtract,
+                    Box::new(Expression::Constant(3)),
+                    Box::new(Expression::Constant(2))
+                ),),
+                Box::new(Expression::Unary(
+                    ast::UnaryOperator::Complement,
+                    Box::new(Expression::Constant(2))
+                ))
+            ))
         );
     }
 }

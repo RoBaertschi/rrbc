@@ -10,11 +10,12 @@ use std::{
 };
 
 use crate::{
-    assembly, ast, codegen,
-    emit::EmitAsm,
+    ast,
+    //tackler, tacky,
+    //assembly, ast, codegen,
+    //emit::EmitAsm,
     lexer::{self, LexerError},
     parser::{self, ParserError},
-    tackler, tacky,
 };
 
 #[derive(Debug)]
@@ -245,28 +246,28 @@ impl Options {
         Ok(program)
     }
 
-    /// Runs the code gen without creating the file.
-    pub fn run_code_gen(
-        &self,
-        ast_program: tacky::Program,
-    ) -> Result<assembly::Program, DriverExecutionError> {
-        let program = codegen::code_generation(ast_program);
-
-        if let Stage::Codegen = self.stage {
-            println!("{:#?}", program);
-        }
-
-        Ok(program)
-    }
-
-    pub fn run_assembly_emission(
-        &self,
-        program: assembly::Program,
-    ) -> Result<(), DriverExecutionError> {
-        fs::write(&self.assembly_file, program.emit(0))?;
-
-        Ok(())
-    }
+    ///// Runs the code gen without creating the file.
+    //pub fn run_code_gen(
+    //    &self,
+    //    ast_program: tacky::Program,
+    //) -> Result<assembly::Program, DriverExecutionError> {
+    //    let program = codegen::code_generation(ast_program);
+    //
+    //    if let Stage::Codegen = self.stage {
+    //        println!("{:#?}", program);
+    //    }
+    //
+    //    Ok(program)
+    //}
+    //
+    //pub fn run_assembly_emission(
+    //    &self,
+    //    program: assembly::Program,
+    //) -> Result<(), DriverExecutionError> {
+    //    fs::write(&self.assembly_file, program.emit(0))?;
+    //
+    //    Ok(())
+    //}
 }
 
 pub fn run() -> Result<(), DriverExecutionError> {
@@ -294,20 +295,20 @@ pub fn run() -> Result<(), DriverExecutionError> {
         return Ok(());
     }
 
-    let program = tackler::emit_tacky_program(program);
+    //let program = tackler::emit_tacky_program(program);
 
-    if let Stage::Tacky = opts.stage {
-        println!("{:#?}", program);
-        return Ok(());
-    }
-
-    let program = opts.run_code_gen(program)?;
-
-    if let Stage::Codegen = opts.stage {
-        return Ok(());
-    }
-
-    opts.run_assembly_emission(program)?;
+    //if let Stage::Tacky = opts.stage {
+    //    println!("{:#?}", program);
+    //    return Ok(());
+    //}
+    //
+    //let program = opts.run_code_gen(program)?;
+    //
+    //if let Stage::Codegen = opts.stage {
+    //    return Ok(());
+    //}
+    //
+    //opts.run_assembly_emission(program)?;
 
     if let Stage::Compile = opts.stage {
         opts.run_assembler()?;

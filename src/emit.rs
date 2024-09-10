@@ -72,7 +72,7 @@ impl EmitAsm for FunctionDefinition {
         format!(
             "# {:?}\n{}\n{}:\n{}\n{}\n# End function\n",
             self,
-            format!("{}.global {}", tabs, self.name),
+            format!("{}.globl {}", tabs, self.name),
             if OS == "macos" {
                 format!("_{}", self.name)
             } else {
