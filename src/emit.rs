@@ -1,6 +1,8 @@
 use std::env::consts::OS;
 
-use crate::assembly::{FunctionDefinition, Instruction, Operand, Program, UnaryOperator};
+use crate::assembly::{
+    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, UnaryOperator,
+};
 
 /// A Structure that implements this trait, can emit assembly using the provided function.
 /// A high-level construct should also add a comment with more debugging information.
@@ -18,6 +20,8 @@ impl EmitAsm for Operand {
                     + match reg {
                         crate::assembly::Register::AX => "eax",
                         crate::assembly::Register::R10 => "r10d",
+                        crate::assembly::Register::DX => "edx",
+                        crate::assembly::Register::R11 => "r11d",
                     }
             }
             Operand::Imm(val) => format!("${}", val),
@@ -50,6 +54,15 @@ impl EmitAsm for Instruction {
                 )
             }
             Instruction::AllocateStack(val) => format!("{}subq ${}, %rsp\n", tabs, *val),
+            Instruction::Binary(o, lhs, rhs) => format!(
+                "{}{} {},{}\n",
+                tabs,
+                o.emit(indent_depth),
+                lhs.emit(indent_depth),
+                rhs.emit(indent_depth),
+            ),
+            Instruction::Idiv(op) => format!("{}idivl {}\n", tabs, op.emit(indent_depth)),
+            Instruction::Cdq => "cdq\n".to_owned(),
         }
     }
 }
@@ -60,6 +73,17 @@ impl EmitAsm for UnaryOperator {
             UnaryOperator::Neg => "negl".to_owned(),
             UnaryOperator::Not => "notl".to_owned(),
         }
+    }
+}
+
+impl EmitAsm for BinaryOperator {
+    fn emit(&self, _: u32) -> String {
+        match self {
+            BinaryOperator::Add => "addl",
+            BinaryOperator::Sub => "subl",
+            BinaryOperator::Mult => "imull",
+        }
+        .to_owned()
     }
 }
 

@@ -39,7 +39,12 @@ impl SecondPass {
                     self.pseudo_to_stack(dst);
                 }
                 Instruction::Unary(_, operand) => self.pseudo_to_stack(operand),
-                _ => {}
+                Instruction::Binary(_, op1, op2) => {
+                    self.pseudo_to_stack(op1);
+                    self.pseudo_to_stack(op2);
+                }
+                Instruction::Idiv(operand) => self.pseudo_to_stack(operand),
+                Instruction::Cdq | Instruction::AllocateStack(_) => {}
             }
         }
 
