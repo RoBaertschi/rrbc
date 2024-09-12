@@ -50,6 +50,11 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Remainder,
+    Sal,
+    Sar,
+    And,
+    Xor,
+    Or,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

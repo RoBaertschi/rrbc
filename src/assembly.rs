@@ -20,6 +20,11 @@ pub enum BinaryOperator {
     Add,
     Sub,
     Mult,
+    Sal,
+    Sar,
+    And,
+    Xor,
+    Or,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

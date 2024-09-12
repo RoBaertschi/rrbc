@@ -1,3 +1,5 @@
+use crate::unique_id;
+
 #[derive(Debug)]
 pub enum LexerError {
     UnknownCharacter(char),
@@ -17,13 +19,18 @@ pub enum Token {
     Semicolon,
 
     // Operator
-    Minus,     // -
-    Plus,      // +
-    Asterisk,  // *
-    Slash,     // /
-    Percent,   // %
-    Decrement, // --
-    Tilde,     // ~
+    Minus,      // -
+    Plus,       // +
+    Asterisk,   // *
+    Slash,      // /
+    Percent,    // %
+    Decrement,  // --
+    Tilde,      // ~
+    And,        // &
+    Or,         // |
+    Xor,        // ^
+    ShiftLeft,  // <<
+    ShiftRight, // >>
 
     // Keywords
     KWInt,
@@ -145,6 +152,25 @@ impl Lexer {
             b'*' => Token::Asterisk,
             b'/' => Token::Slash,
             b'%' => Token::Percent,
+            b'^' => Token::Xor,
+            b'|' => Token::Or,
+            b'&' => Token::And,
+            b'<' => {
+                if self.peek_char() == b'<' {
+                    self.read_char();
+                    Token::ShiftLeft
+                } else {
+                    return Err(LexerError::UnknownCharacter(char::from(self.ch)));
+                }
+            }
+            b'>' => {
+                if self.peek_char() == b'>' {
+                    self.read_char();
+                    Token::ShiftRight
+                } else {
+                    return Err(LexerError::UnknownCharacter(char::from(self.ch)));
+                }
+            }
             b'-' => {
                 if self.peek_char() == b'-' {
                     self.next_token()?;

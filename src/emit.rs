@@ -6,7 +6,7 @@ use crate::assembly::{
 
 /// A Structure that implements this trait, can emit assembly using the provided function.
 /// A high-level construct should also add a comment with more debugging information.
-/// A high-level construct would be a function, statement or expression.
+/// A high-level construct would currently be a function.
 pub trait EmitAsm {
     /// The indent_depth argument only needs to be used when you have to indent something.
     fn emit(&self, indent_depth: u32) -> String;
@@ -82,6 +82,11 @@ impl EmitAsm for BinaryOperator {
             BinaryOperator::Add => "addl",
             BinaryOperator::Sub => "subl",
             BinaryOperator::Mult => "imull",
+            BinaryOperator::Sal => "sall",
+            BinaryOperator::Sar => "sarl",
+            BinaryOperator::And => "andl",
+            BinaryOperator::Xor => "xorl",
+            BinaryOperator::Or => "orl",
         }
         .to_owned()
     }

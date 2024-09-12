@@ -14,6 +14,11 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Reminder,
+    ShiftLeft,
+    ShiftRight,
+    And,
+    Xor,
+    Or,
 }
 
 impl BinaryOperator {
@@ -24,6 +29,11 @@ impl BinaryOperator {
             BinaryOperator::Multiply => tacky::BinaryOperator::Multiply,
             BinaryOperator::Divide => tacky::BinaryOperator::Divide,
             BinaryOperator::Reminder => tacky::BinaryOperator::Remainder,
+            BinaryOperator::ShiftLeft => tacky::BinaryOperator::Sal,
+            BinaryOperator::ShiftRight => tacky::BinaryOperator::Sar,
+            BinaryOperator::And => tacky::BinaryOperator::And,
+            BinaryOperator::Xor => tacky::BinaryOperator::Xor,
+            BinaryOperator::Or => tacky::BinaryOperator::Or,
         }
     }
 }

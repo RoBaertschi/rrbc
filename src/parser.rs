@@ -11,9 +11,13 @@ use crate::{
 #[derive(PartialEq, PartialOrd)]
 enum Precedence {
     Lowest = 0,
-    Sum = 1,
-    Product = 2,
-    Prefix = 3,
+    Or = 1,
+    Xor = 2,
+    And = 3,
+    Shift = 4,
+    Sum = 5,
+    Product = 6,
+    Prefix = 7,
 }
 
 impl Precedence {
@@ -24,6 +28,11 @@ impl Precedence {
             Token::Asterisk => Self::Product,
             Token::Slash => Self::Product,
             Token::Percent => Self::Product,
+            Token::And => Self::And,
+            Token::Or => Self::Or,
+            Token::Xor => Self::Xor,
+            Token::ShiftLeft => Self::Shift,
+            Token::ShiftRight => Self::Shift,
             _ => return None,
         })
     }
@@ -100,6 +109,23 @@ impl Parser {
             mem::discriminant(&Token::Percent),
             Self::parse_binary_expression,
         );
+        parser.register_infix(
+            mem::discriminant(&Token::ShiftLeft),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::ShiftRight),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::And),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Xor),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(mem::discriminant(&Token::Or), Self::parse_binary_expression);
 
         parser.next_token()?;
         parser.next_token()?;
@@ -158,6 +184,11 @@ impl Parser {
             Token::Asterisk => BinaryOperator::Multiply,
             Token::Slash => BinaryOperator::Divide,
             Token::Percent => BinaryOperator::Reminder,
+            Token::ShiftLeft => BinaryOperator::ShiftLeft,
+            Token::ShiftRight => BinaryOperator::ShiftRight,
+            Token::And => BinaryOperator::And,
+            Token::Xor => BinaryOperator::Xor,
+            Token::Or => BinaryOperator::Or,
             tok => return Err(ParserError::NoBinaryOperatorFound(tok.clone())),
         };
 
@@ -438,5 +469,80 @@ mod tests {
                 ))
             ))
         );
+    }
+    #[test]
+    fn test_bitwise_prec() {
+        let lexer = Lexer::new(
+            r"
+        int main(void) {
+            return 40 << 4 + 12 >> 1;
+        }
+        "
+            .to_owned(),
+        );
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser
+            .parse_program()
+            .expect("the program should be parsed successfully");
+
+        let expected_result = ast::Statement::Return(Expression::Binary(
+            BinaryOperator::Or,
+            Box::new(Expression::Binary(
+                BinaryOperator::Xor,
+                Box::new(Expression::Binary(
+                    BinaryOperator::And,
+                    Box::new(Expression::Binary(
+                        BinaryOperator::ShiftLeft,
+                        Box::new(Expression::Constant(1)),
+                        Box::new(Expression::Constant(2)),
+                    )),
+                    Box::new(Expression::Constant(3)),
+                )),
+                Box::new(Expression::Constant(2)),
+            )),
+            Box::new(Expression::Constant(3)),
+        ));
+
+        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_definition.body, expected_result);
+    }
+
+    #[test]
+    fn test_bitwise_prec2() {
+        let lexer = Lexer::new(
+            r"
+        int main(void) {
+            return 1 << 2 & 3 ^ 2 | 3;
+        }
+        "
+            .to_owned(),
+        );
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser
+            .parse_program()
+            .expect("the program should be parsed successfully");
+
+        let expected_result = ast::Statement::Return(Expression::Binary(
+            BinaryOperator::Or,
+            Box::new(Expression::Binary(
+                BinaryOperator::Xor,
+                Box::new(Expression::Binary(
+                    BinaryOperator::And,
+                    Box::new(Expression::Binary(
+                        BinaryOperator::ShiftLeft,
+                        Box::new(Expression::Constant(1)),
+                        Box::new(Expression::Constant(2)),
+                    )),
+                    Box::new(Expression::Constant(3)),
+                )),
+                Box::new(Expression::Constant(2)),
+            )),
+            Box::new(Expression::Constant(3)),
+        ));
+
+        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_definition.body, expected_result);
     }
 }
