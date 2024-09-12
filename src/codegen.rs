@@ -1,13 +1,13 @@
 use crate::{assembly, ast, tacky};
 
-pub mod pass1;
-pub mod pass2;
-pub mod pass3;
+pub mod fixup_instructions;
+pub mod replace_pseudo;
+pub mod tacky_to_assembly;
 
 pub fn code_generation(program: tacky::Program) -> assembly::Program {
-    let program = pass1::code_generation(program);
-    let (program, stack_offset) = pass2::run_second_pass(program);
-    let program = pass3::run_third_pass(program, stack_offset);
+    let program = tacky_to_assembly::code_generation(program);
+    let (program, stack_offset) = replace_pseudo::run_second_pass(program);
+    let program = fixup_instructions::run_third_pass(program, stack_offset);
     program
 }
 

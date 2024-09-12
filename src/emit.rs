@@ -1,7 +1,7 @@
 use std::env::consts::OS;
 
 use crate::assembly::{
-    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, UnaryOperator,
+    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, RegisterBytes, UnaryOperator,
 };
 
 /// A Structure that implements this trait, can emit assembly using the provided function.
@@ -22,6 +22,10 @@ impl EmitAsm for Operand {
                         crate::assembly::Register::R10 => "r10d",
                         crate::assembly::Register::DX => "edx",
                         crate::assembly::Register::R11 => "r11d",
+                        crate::assembly::Register::CX(bytes) => match bytes {
+                            RegisterBytes::All => "ecx",
+                            RegisterBytes::Lower => "cl",
+                        },
                     }
             }
             Operand::Imm(val) => format!("${}", val),

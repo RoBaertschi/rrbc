@@ -37,10 +37,17 @@ pub enum Operand {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
+    CX(RegisterBytes),
     AX,
     DX,
     R10,
     R11,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RegisterBytes {
+    Lower,
+    All,
 }
 
 #[derive(Debug)]

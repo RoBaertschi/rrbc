@@ -487,21 +487,17 @@ mod tests {
             .expect("the program should be parsed successfully");
 
         let expected_result = ast::Statement::Return(Expression::Binary(
-            BinaryOperator::Or,
+            BinaryOperator::ShiftRight,
             Box::new(Expression::Binary(
-                BinaryOperator::Xor,
+                BinaryOperator::ShiftLeft,
+                Box::new(Expression::Constant(40)),
                 Box::new(Expression::Binary(
-                    BinaryOperator::And,
-                    Box::new(Expression::Binary(
-                        BinaryOperator::ShiftLeft,
-                        Box::new(Expression::Constant(1)),
-                        Box::new(Expression::Constant(2)),
-                    )),
-                    Box::new(Expression::Constant(3)),
+                    BinaryOperator::Add,
+                    Box::new(Expression::Constant(4)),
+                    Box::new(Expression::Constant(12)),
                 )),
-                Box::new(Expression::Constant(2)),
             )),
-            Box::new(Expression::Constant(3)),
+            Box::new(Expression::Constant(1)),
         ));
 
         assert_eq!(program.function_definition.name, "main".to_owned());

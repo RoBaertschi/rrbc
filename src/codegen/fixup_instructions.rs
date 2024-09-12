@@ -1,5 +1,5 @@
 use crate::assembly::{
-    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register,
+    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register, RegisterBytes,
 };
 
 pub fn run_third_pass(program: Program, stack_offset: u32) -> Program {
@@ -52,6 +52,44 @@ fn instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Register(Register::R11),
                     dst: Operand::Stack(rhs),
+                });
+            }
+            Instruction::Binary(BinaryOperator::Sal, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+                new_instructions.push(Instruction::Mov {
+                    src: Operand::Register(Register::CX(RegisterBytes::All)),
+                    dst: Operand::Register(Register::R10),
+                });
+                new_instructions.push(Instruction::Mov {
+                    src: Operand::Stack(lhs),
+                    dst: Operand::Register(Register::CX(RegisterBytes::All)),
+                });
+                new_instructions.push(Instruction::Binary(
+                    BinaryOperator::Sal,
+                    Operand::Register(Register::CX(RegisterBytes::Lower)),
+                    Operand::Stack(rhs),
+                ));
+                new_instructions.push(Instruction::Mov {
+                    dst: Operand::Register(Register::CX(RegisterBytes::All)),
+                    src: Operand::Register(Register::R10),
+                });
+            }
+            Instruction::Binary(BinaryOperator::Sar, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+                new_instructions.push(Instruction::Mov {
+                    src: Operand::Register(Register::CX(RegisterBytes::All)),
+                    dst: Operand::Register(Register::R10),
+                });
+                new_instructions.push(Instruction::Mov {
+                    src: Operand::Stack(lhs),
+                    dst: Operand::Register(Register::CX(RegisterBytes::All)),
+                });
+                new_instructions.push(Instruction::Binary(
+                    BinaryOperator::Sar,
+                    Operand::Register(Register::CX(RegisterBytes::Lower)),
+                    Operand::Stack(rhs),
+                ));
+                new_instructions.push(Instruction::Mov {
+                    dst: Operand::Register(Register::CX(RegisterBytes::All)),
+                    src: Operand::Register(Register::R10),
                 });
             }
             Instruction::Binary(op, Operand::Stack(lhs), Operand::Stack(rhs)) => {
