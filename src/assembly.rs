@@ -1,10 +1,28 @@
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instruction {
-    Mov { src: Operand, dst: Operand },
-    Unary(UnaryOperator, Operand),
-    Binary(BinaryOperator, Operand, Operand),
+    Mov {
+        src: Operand,
+        dst: Operand,
+    },
+    Unary {
+        op: UnaryOperator,
+        operand: Operand,
+    },
+    Binary {
+        op: BinaryOperator,
+        lhs: Operand,
+        rhs: Operand,
+    },
+    Cmp {
+        lhs: Operand,
+        rhs: Operand,
+    },
     Idiv(Operand),
     Cdq,
+    Jmp(String),
+    JumpCC(CondCode, String),
+    SetCC(CondCode, Operand),
+    Label(String),
     AllocateStack(u32),
     Ret,
 }
@@ -42,6 +60,16 @@ pub enum Register {
     DX,
     R10,
     R11,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CondCode {
+    E,
+    NE,
+    G,
+    GE,
+    L,
+    LE,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

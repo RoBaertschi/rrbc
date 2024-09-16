@@ -4,7 +4,11 @@ use crate::tacky;
 pub enum Expression {
     Constant(i32),
     Unary(UnaryOperator, Box<Expression>),
-    Binary(BinaryOperator, Box<Expression>, Box<Expression>),
+    Binary {
+        op: BinaryOperator,
+        lhs: Box<Expression>,
+        rhs: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -16,9 +20,17 @@ pub enum BinaryOperator {
     Reminder,
     ShiftLeft,
     ShiftRight,
-    And,
+    BitwiseAnd,
     Xor,
+    BitwiseOr,
+    And,
     Or,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
 }
 
 impl BinaryOperator {
@@ -31,9 +43,17 @@ impl BinaryOperator {
             BinaryOperator::Reminder => tacky::BinaryOperator::Remainder,
             BinaryOperator::ShiftLeft => tacky::BinaryOperator::Sal,
             BinaryOperator::ShiftRight => tacky::BinaryOperator::Sar,
-            BinaryOperator::And => tacky::BinaryOperator::And,
+            BinaryOperator::BitwiseAnd => tacky::BinaryOperator::BitwiseAnd,
             BinaryOperator::Xor => tacky::BinaryOperator::Xor,
-            BinaryOperator::Or => tacky::BinaryOperator::Or,
+            BinaryOperator::BitwiseOr => tacky::BinaryOperator::BitwiseOr,
+            BinaryOperator::And => unreachable!("And && can not be a tacky binary operator"),
+            BinaryOperator::Or => unreachable!("Or || can not be a tacky binary operator"),
+            BinaryOperator::Equal => tacky::BinaryOperator::Equal,
+            BinaryOperator::NotEqual => tacky::BinaryOperator::NotEqual,
+            BinaryOperator::LessThan => tacky::BinaryOperator::LessThan,
+            BinaryOperator::LessOrEqual => tacky::BinaryOperator::LessOrEqual,
+            BinaryOperator::GreaterThan => tacky::BinaryOperator::GreaterThan,
+            BinaryOperator::GreaterOrEqual => tacky::BinaryOperator::GreaterOrEqual,
         }
     }
 }
@@ -42,6 +62,7 @@ impl BinaryOperator {
 pub enum UnaryOperator {
     Complement,
     Negate,
+    Not,
 }
 
 impl UnaryOperator {
@@ -49,6 +70,7 @@ impl UnaryOperator {
         match self {
             UnaryOperator::Complement => tacky::UnaryOperator::Complement,
             UnaryOperator::Negate => tacky::UnaryOperator::Negate,
+            UnaryOperator::Not => tacky::UnaryOperator::Not,
         }
     }
 }

@@ -11,13 +11,17 @@ use crate::{
 #[derive(PartialEq, PartialOrd)]
 enum Precedence {
     Lowest = 0,
-    Or = 1,
-    Xor = 2,
-    And = 3,
-    Shift = 4,
-    Sum = 5,
-    Product = 6,
-    Prefix = 7,
+    Or,
+    And,
+    BitwiseOr,
+    Xor,
+    BitwiseAnd,
+    Equal,
+    Ordered, // < <= > >=
+    Shift,
+    Sum,
+    Product,
+    Prefix,
 }
 
 impl Precedence {
@@ -28,11 +32,16 @@ impl Precedence {
             Token::Asterisk => Self::Product,
             Token::Slash => Self::Product,
             Token::Percent => Self::Product,
-            Token::And => Self::And,
-            Token::Or => Self::Or,
+            Token::BitwiseAnd => Self::BitwiseAnd,
+            Token::BitwiseOr => Self::BitwiseOr,
             Token::Xor => Self::Xor,
-            Token::ShiftLeft => Self::Shift,
-            Token::ShiftRight => Self::Shift,
+            Token::ShiftLeft | Token::ShiftRight => Self::Shift,
+            Token::Or => Self::Or,
+            Token::And => Self::And,
+            Token::Equal | Token::NotEqual => Self::Equal,
+            Token::LessThan | Token::LessOrEqual | Token::GreaterThan | Token::GreaterOrEqual => {
+                Self::Ordered
+            }
             _ => return None,
         })
     }
@@ -81,14 +90,17 @@ impl Parser {
             infix_functions: HashMap::new(),
         };
 
+        // Prefix
         parser.register_prefix(mem::discriminant(&Token::Constant(1)), Self::parse_constant);
         parser.register_prefix(mem::discriminant(&Token::Minus), Self::parse_unary);
         parser.register_prefix(mem::discriminant(&Token::Tilde), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&Token::Not), Self::parse_unary);
         parser.register_prefix(
             mem::discriminant(&Token::OpenParen),
             Self::parse_grouped_expression,
         );
 
+        // Infix
         parser.register_infix(
             mem::discriminant(&Token::Plus),
             Self::parse_binary_expression,
@@ -118,14 +130,46 @@ impl Parser {
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::And),
+            mem::discriminant(&Token::BitwiseAnd),
             Self::parse_binary_expression,
         );
         parser.register_infix(
             mem::discriminant(&Token::Xor),
             Self::parse_binary_expression,
         );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseOr),
+            Self::parse_binary_expression,
+        );
         parser.register_infix(mem::discriminant(&Token::Or), Self::parse_binary_expression);
+        parser.register_infix(
+            mem::discriminant(&Token::And),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::LessThan),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::LessOrEqual),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::GreaterThan),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::GreaterOrEqual),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Equal),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::NotEqual),
+            Self::parse_binary_expression,
+        );
 
         parser.next_token()?;
         parser.next_token()?;
@@ -186,9 +230,17 @@ impl Parser {
             Token::Percent => BinaryOperator::Reminder,
             Token::ShiftLeft => BinaryOperator::ShiftLeft,
             Token::ShiftRight => BinaryOperator::ShiftRight,
-            Token::And => BinaryOperator::And,
+            Token::BitwiseAnd => BinaryOperator::BitwiseAnd,
             Token::Xor => BinaryOperator::Xor,
+            Token::BitwiseOr => BinaryOperator::BitwiseOr,
+            Token::Equal => BinaryOperator::Equal,
+            Token::NotEqual => BinaryOperator::NotEqual,
+            Token::And => BinaryOperator::And,
             Token::Or => BinaryOperator::Or,
+            Token::LessThan => BinaryOperator::LessThan,
+            Token::LessOrEqual => BinaryOperator::LessOrEqual,
+            Token::GreaterThan => BinaryOperator::GreaterThan,
+            Token::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
             tok => return Err(ParserError::NoBinaryOperatorFound(tok.clone())),
         };
 
@@ -196,7 +248,11 @@ impl Parser {
         self.next_token()?;
         let right = self.parse_expression(precedence)?;
 
-        Ok(Expression::Binary(bin, Box::new(left), Box::new(right)))
+        Ok(Expression::Binary {
+            op: bin,
+            lhs: Box::new(left),
+            rhs: Box::new(right),
+        })
     }
 
     fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
@@ -225,6 +281,14 @@ impl Parser {
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary(
                     ast::UnaryOperator::Complement,
+                    Box::new(expr),
+                ))
+            }
+            Token::Not => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary(
+                    ast::UnaryOperator::Not,
                     Box::new(expr),
                 ))
             }
@@ -335,6 +399,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -356,14 +421,14 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expression::Unary(
+            ast::Statement::Return(Expression::Binary {
+                op: BinaryOperator::Multiply,
+                lhs: Box::new(Expression::Unary(
                     ast::UnaryOperator::Negate,
                     Box::new(Expression::Constant(2))
                 ),),
-                Box::new(Expression::Constant(2))
-            ))
+                rhs: Box::new(Expression::Constant(2))
+            })
         );
     }
 
@@ -386,17 +451,17 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expression::Unary(
+            ast::Statement::Return(Expression::Binary {
+                op: BinaryOperator::Multiply,
+                lhs: Box::new(Expression::Unary(
                     ast::UnaryOperator::Negate,
                     Box::new(Expression::Constant(2))
                 ),),
-                Box::new(Expression::Unary(
+                rhs: Box::new(Expression::Unary(
                     ast::UnaryOperator::Complement,
                     Box::new(Expression::Constant(2))
                 ))
-            ))
+            })
         );
     }
 
@@ -419,21 +484,21 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expression::Unary(
+            ast::Statement::Return(Expression::Binary {
+                op: BinaryOperator::Multiply,
+                lhs: Box::new(Expression::Unary(
                     ast::UnaryOperator::Negate,
                     Box::new(Expression::Constant(2))
                 ),),
-                Box::new(Expression::Binary(
-                    BinaryOperator::Multiply,
-                    Box::new(Expression::Unary(
+                rhs: Box::new(Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    lhs: Box::new(Expression::Unary(
                         ast::UnaryOperator::Complement,
                         Box::new(Expression::Constant(2))
                     )),
-                    Box::new(Expression::Constant(4))
-                ))
-            ))
+                    rhs: Box::new(Expression::Constant(4))
+                })
+            })
         );
     }
 
@@ -456,18 +521,18 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expression::Binary(
-                    BinaryOperator::Subtract,
-                    Box::new(Expression::Constant(3)),
-                    Box::new(Expression::Constant(2))
-                ),),
-                Box::new(Expression::Unary(
+            ast::Statement::Return(Expression::Binary {
+                op: BinaryOperator::Multiply,
+                lhs: Box::new(Expression::Binary {
+                    op: BinaryOperator::Subtract,
+                    lhs: Box::new(Expression::Constant(3)),
+                    rhs: Box::new(Expression::Constant(2))
+                },),
+                rhs: Box::new(Expression::Unary(
                     ast::UnaryOperator::Complement,
                     Box::new(Expression::Constant(2))
                 ))
-            ))
+            })
         );
     }
     #[test]
@@ -486,19 +551,19 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = ast::Statement::Return(Expression::Binary(
-            BinaryOperator::ShiftRight,
-            Box::new(Expression::Binary(
-                BinaryOperator::ShiftLeft,
-                Box::new(Expression::Constant(40)),
-                Box::new(Expression::Binary(
-                    BinaryOperator::Add,
-                    Box::new(Expression::Constant(4)),
-                    Box::new(Expression::Constant(12)),
-                )),
-            )),
-            Box::new(Expression::Constant(1)),
-        ));
+        let expected_result = ast::Statement::Return(Expression::Binary {
+            op: BinaryOperator::ShiftRight,
+            lhs: Box::new(Expression::Binary {
+                op: BinaryOperator::ShiftLeft,
+                lhs: Box::new(Expression::Constant(40)),
+                rhs: Box::new(Expression::Binary {
+                    op: BinaryOperator::Add,
+                    lhs: Box::new(Expression::Constant(4)),
+                    rhs: Box::new(Expression::Constant(12)),
+                }),
+            }),
+            rhs: Box::new(Expression::Constant(1)),
+        });
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
@@ -520,23 +585,23 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = ast::Statement::Return(Expression::Binary(
-            BinaryOperator::Or,
-            Box::new(Expression::Binary(
-                BinaryOperator::Xor,
-                Box::new(Expression::Binary(
-                    BinaryOperator::And,
-                    Box::new(Expression::Binary(
-                        BinaryOperator::ShiftLeft,
-                        Box::new(Expression::Constant(1)),
-                        Box::new(Expression::Constant(2)),
-                    )),
-                    Box::new(Expression::Constant(3)),
-                )),
-                Box::new(Expression::Constant(2)),
-            )),
-            Box::new(Expression::Constant(3)),
-        ));
+        let expected_result = ast::Statement::Return(Expression::Binary {
+            op: BinaryOperator::BitwiseOr,
+            lhs: Box::new(Expression::Binary {
+                op: BinaryOperator::Xor,
+                lhs: Box::new(Expression::Binary {
+                    op: BinaryOperator::BitwiseAnd,
+                    lhs: Box::new(Expression::Binary {
+                        op: BinaryOperator::ShiftLeft,
+                        lhs: Box::new(Expression::Constant(1)),
+                        rhs: Box::new(Expression::Constant(2)),
+                    }),
+                    rhs: Box::new(Expression::Constant(3)),
+                }),
+                rhs: Box::new(Expression::Constant(2)),
+            }),
+            rhs: Box::new(Expression::Constant(3)),
+        });
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);

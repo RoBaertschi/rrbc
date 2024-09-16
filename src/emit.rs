@@ -49,7 +49,7 @@ impl EmitAsm for Instruction {
             Instruction::Ret => {
                 format!("{}movq %rbp, %rsp\n{}popq %rbp\n{}ret\n", tabs, tabs, tabs)
             }
-            Instruction::Unary(op, operand) => {
+            Instruction::Unary { op, operand } => {
                 format!(
                     "{}{} {}\n",
                     tabs,
@@ -58,7 +58,7 @@ impl EmitAsm for Instruction {
                 )
             }
             Instruction::AllocateStack(val) => format!("{}subq ${}, %rsp\n", tabs, *val),
-            Instruction::Binary(o, lhs, rhs) => format!(
+            Instruction::Binary { op: o, lhs, rhs } => format!(
                 "{}{} {},{}\n",
                 tabs,
                 o.emit(indent_depth),

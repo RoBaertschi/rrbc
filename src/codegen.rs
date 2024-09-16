@@ -1,4 +1,4 @@
-use crate::{assembly, ast, tacky};
+use crate::{assembly, tacky};
 
 pub mod fixup_instructions;
 pub mod replace_pseudo;

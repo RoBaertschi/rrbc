@@ -38,8 +38,12 @@ impl SecondPass {
                     self.pseudo_to_stack(src);
                     self.pseudo_to_stack(dst);
                 }
-                Instruction::Unary(_, operand) => self.pseudo_to_stack(operand),
-                Instruction::Binary(_, op1, op2) => {
+                Instruction::Unary { op: _, operand } => self.pseudo_to_stack(operand),
+                Instruction::Binary {
+                    op: _,
+                    lhs: op1,
+                    rhs: op2,
+                } => {
                     self.pseudo_to_stack(op1);
                     self.pseudo_to_stack(op2);
                 }

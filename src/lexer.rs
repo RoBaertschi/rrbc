@@ -1,5 +1,3 @@
-use crate::unique_id;
-
 #[derive(Debug)]
 pub enum LexerError {
     UnknownCharacter(char),
@@ -19,18 +17,27 @@ pub enum Token {
     Semicolon,
 
     // Operator
-    Minus,      // -
-    Plus,       // +
-    Asterisk,   // *
-    Slash,      // /
-    Percent,    // %
-    Decrement,  // --
-    Tilde,      // ~
-    And,        // &
-    Or,         // |
-    Xor,        // ^
-    ShiftLeft,  // <<
-    ShiftRight, // >>
+    Minus,          // -
+    Plus,           // +
+    Asterisk,       // *
+    Slash,          // /
+    Percent,        // %
+    Decrement,      // --
+    Tilde,          // ~
+    BitwiseAnd,     // &
+    BitwiseOr,      // |
+    Xor,            // ^
+    ShiftLeft,      // <<
+    ShiftRight,     // >>
+    Not,            // !
+    And,            // &&
+    Or,             // ||
+    Equal,          // ==
+    NotEqual,       // !=
+    LessThan,       // <
+    GreaterThan,    // >
+    LessOrEqual,    // <=
+    GreaterOrEqual, // >=
 
     // Keywords
     KWInt,
@@ -153,24 +160,49 @@ impl Lexer {
             b'/' => Token::Slash,
             b'%' => Token::Percent,
             b'^' => Token::Xor,
-            b'|' => Token::Or,
-            b'&' => Token::And,
-            b'<' => {
-                if self.peek_char() == b'<' {
+            b'|' => match self.peek_char() {
+                b'|' => {
+                    self.read_char();
+                    Token::Or
+                }
+                _ => Token::BitwiseOr,
+            },
+            b'&' => match self.peek_char() {
+                b'&' => {
+                    self.read_char();
+                    Token::And
+                }
+                _ => Token::BitwiseAnd,
+            },
+            b'!' => match self.peek_char() {
+                b'=' => {
+                    self.read_char();
+                    Token::NotEqual
+                }
+                _ => Token::Not,
+            },
+            b'<' => match self.peek_char() {
+                b'<' => {
                     self.read_char();
                     Token::ShiftLeft
-                } else {
-                    return Err(LexerError::UnknownCharacter(char::from(self.ch)));
                 }
-            }
-            b'>' => {
-                if self.peek_char() == b'>' {
+                b'=' => {
+                    self.read_char();
+                    Token::LessOrEqual
+                }
+                _ => Token::LessThan,
+            },
+            b'>' => match self.peek_char() {
+                b'>' => {
                     self.read_char();
                     Token::ShiftRight
-                } else {
-                    return Err(LexerError::UnknownCharacter(char::from(self.ch)));
                 }
-            }
+                b'=' => {
+                    self.read_char();
+                    Token::GreaterOrEqual
+                }
+                _ => Token::GreaterThan,
+            },
             b'-' => {
                 if self.peek_char() == b'-' {
                     self.next_token()?;
@@ -178,6 +210,10 @@ impl Lexer {
                 } else {
                     Token::Minus
                 }
+            }
+            b'=' if self.peek_char() == b'=' => {
+                self.read_char();
+                Token::Equal
             }
             0 => return Ok(Token::Eof),
             _ => {

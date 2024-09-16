@@ -26,6 +26,17 @@ pub enum Instruction {
         rhs: Value,
         dst: Var,
     },
+    /// src, dst
+    /// We don't use structure because they can't be matched in match unlike these here.
+    Copy(Value, Value),
+    /// Label to jump to.
+    Jump(String),
+    /// Expression, Label
+    JumpIfZero(Value, String),
+    /// Expression, Label
+    JumpIfNotZero(Value, String),
+    /// Identifier
+    Label(String),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,15 +63,22 @@ pub enum BinaryOperator {
     Remainder,
     Sal,
     Sar,
-    And,
+    BitwiseAnd,
     Xor,
-    Or,
+    BitwiseOr,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UnaryOperator {
     Complement,
     Negate,
+    Not,
 }
 
 impl UnaryOperator {
@@ -68,6 +86,7 @@ impl UnaryOperator {
         match self {
             UnaryOperator::Complement => assembly::UnaryOperator::Not,
             UnaryOperator::Negate => assembly::UnaryOperator::Neg,
+            _ => todo!("Not implemented UnaryOperator to assembly: {:?}", self),
         }
     }
 }

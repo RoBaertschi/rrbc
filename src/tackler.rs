@@ -1,5 +1,5 @@
 use crate::{
-    ast,
+    ast::{self, BinaryOperator},
     tacky::{FunctionDefiniton, Instruction, Program, Value, Var},
     unique_id,
 };
@@ -9,7 +9,7 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
         ast::Expression::Constant(val) => (vec![], Value::Constant(val)),
         ast::Expression::Unary(op, expr) => {
             let (mut inner_ins, val) = emit_tacky_expression(*expr);
-            let dst_name = unique_id::temp();
+            let dst_name = unique_id::temp_variable_name();
             let dst = Value::Var(Var(dst_name.clone()));
             inner_ins.append(&mut vec![Instruction::Unary {
                 operator: op.to_tacky(),
@@ -19,15 +19,61 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
 
             (inner_ins, dst)
         }
-        ast::Expression::Binary(op, lhs, rhs) => {
+        ast::Expression::Binary {
+            op: BinaryOperator::Or,
+            lhs,
+            rhs,
+        } => {
+            let (mut instructions, lhs) = emit_tacky_expression(*lhs);
+            let true_label = unique_id::temp_lable_name("or_false");
+            let end_label = unique_id::temp_lable_name("or_end");
+            let dst_name = unique_id::temp_variable_name();
+            let dst = Value::Var(Var(dst_name.clone()));
+            instructions.push(Instruction::JumpIfNotZero(lhs, true_label.clone()));
+            let (mut instructions2, rhs) = emit_tacky_expression(*rhs);
+            instructions.append(&mut instructions2);
+            instructions.push(Instruction::JumpIfNotZero(rhs, true_label.clone()));
+            instructions.append(&mut vec![
+                Instruction::Copy(Value::Constant(0), Value::Var(Var(dst_name.clone()))),
+                Instruction::Jump(end_label.clone()),
+                Instruction::Label(true_label),
+                Instruction::Copy(Value::Constant(1), Value::Var(Var(dst_name.clone()))),
+                Instruction::Label(end_label),
+            ]);
+            (instructions, dst)
+        }
+        ast::Expression::Binary {
+            op: BinaryOperator::And,
+            lhs,
+            rhs,
+        } => {
+            let (mut instructions, lhs) = emit_tacky_expression(*lhs);
+            let false_label = unique_id::temp_lable_name("and_false");
+            let end_label = unique_id::temp_lable_name("and_end");
+            let dst_name = unique_id::temp_variable_name();
+            let dst = Value::Var(Var(dst_name.clone()));
+            instructions.push(Instruction::JumpIfZero(lhs, false_label.clone()));
+            let (mut instructions2, rhs) = emit_tacky_expression(*rhs);
+            instructions.append(&mut instructions2);
+            instructions.push(Instruction::JumpIfZero(rhs, false_label.clone()));
+            instructions.append(&mut vec![
+                Instruction::Copy(Value::Constant(1), Value::Var(Var(dst_name.clone()))),
+                Instruction::Jump(end_label.clone()),
+                Instruction::Label(false_label),
+                Instruction::Copy(Value::Constant(0), Value::Var(Var(dst_name.clone()))),
+                Instruction::Label(end_label),
+            ]);
+            (instructions, dst)
+        }
+        ast::Expression::Binary { op, lhs, rhs } => {
             let (mut instructions, lhs) = emit_tacky_expression(*lhs);
             let mut rhs_expr = emit_tacky_expression(*rhs);
             instructions.append(&mut rhs_expr.0);
-            let dst_name = unique_id::temp();
+            let dst_name = unique_id::temp_variable_name();
             let dst = Value::Var(Var(dst_name.clone()));
             instructions.append(&mut vec![Instruction::Binary {
                 op: op.to_tacky(),
-                lhs: lhs,
+                lhs,
                 rhs: rhs_expr.1,
                 dst: Var(dst_name),
             }]);
@@ -82,7 +128,7 @@ mod tests {
 
         let program = emit_tacky_program(program);
 
-        let expected = vec![
+        let expected = [
             Instruction::Binary {
                 op: crate::tacky::BinaryOperator::Add,
                 lhs: Value::Constant(1),

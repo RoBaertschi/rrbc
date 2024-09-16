@@ -39,22 +39,30 @@ fn instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                 }
                 (src, dst) => new_instructions.push(Instruction::Mov { src, dst }),
             },
-            Instruction::Binary(BinaryOperator::Mult, lhs, Operand::Stack(rhs)) => {
+            Instruction::Binary {
+                op: BinaryOperator::Mult,
+                lhs,
+                rhs: Operand::Stack(rhs),
+            } => {
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Stack(rhs),
                     dst: Operand::Register(Register::R11),
                 });
-                new_instructions.push(Instruction::Binary(
-                    BinaryOperator::Mult,
+                new_instructions.push(Instruction::Binary {
+                    op: BinaryOperator::Mult,
                     lhs,
-                    Operand::Register(Register::R11),
-                ));
+                    rhs: Operand::Register(Register::R11),
+                });
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Register(Register::R11),
                     dst: Operand::Stack(rhs),
                 });
             }
-            Instruction::Binary(BinaryOperator::Sal, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+            Instruction::Binary {
+                op: BinaryOperator::Sal,
+                lhs: Operand::Stack(lhs),
+                rhs: Operand::Stack(rhs),
+            } => {
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Register(Register::CX(RegisterBytes::All)),
                     dst: Operand::Register(Register::R10),
@@ -63,17 +71,21 @@ fn instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                     src: Operand::Stack(lhs),
                     dst: Operand::Register(Register::CX(RegisterBytes::All)),
                 });
-                new_instructions.push(Instruction::Binary(
-                    BinaryOperator::Sal,
-                    Operand::Register(Register::CX(RegisterBytes::Lower)),
-                    Operand::Stack(rhs),
-                ));
+                new_instructions.push(Instruction::Binary {
+                    op: BinaryOperator::Sal,
+                    lhs: Operand::Register(Register::CX(RegisterBytes::Lower)),
+                    rhs: Operand::Stack(rhs),
+                });
                 new_instructions.push(Instruction::Mov {
                     dst: Operand::Register(Register::CX(RegisterBytes::All)),
                     src: Operand::Register(Register::R10),
                 });
             }
-            Instruction::Binary(BinaryOperator::Sar, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+            Instruction::Binary {
+                op: BinaryOperator::Sar,
+                lhs: Operand::Stack(lhs),
+                rhs: Operand::Stack(rhs),
+            } => {
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Register(Register::CX(RegisterBytes::All)),
                     dst: Operand::Register(Register::R10),
@@ -82,26 +94,30 @@ fn instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                     src: Operand::Stack(lhs),
                     dst: Operand::Register(Register::CX(RegisterBytes::All)),
                 });
-                new_instructions.push(Instruction::Binary(
-                    BinaryOperator::Sar,
-                    Operand::Register(Register::CX(RegisterBytes::Lower)),
-                    Operand::Stack(rhs),
-                ));
+                new_instructions.push(Instruction::Binary {
+                    op: BinaryOperator::Sar,
+                    lhs: Operand::Register(Register::CX(RegisterBytes::Lower)),
+                    rhs: Operand::Stack(rhs),
+                });
                 new_instructions.push(Instruction::Mov {
                     dst: Operand::Register(Register::CX(RegisterBytes::All)),
                     src: Operand::Register(Register::R10),
                 });
             }
-            Instruction::Binary(op, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+            Instruction::Binary {
+                op,
+                lhs: Operand::Stack(lhs),
+                rhs: Operand::Stack(rhs),
+            } => {
                 new_instructions.push(Instruction::Mov {
                     src: Operand::Stack(lhs),
                     dst: Operand::Register(Register::R10),
                 });
-                new_instructions.push(Instruction::Binary(
+                new_instructions.push(Instruction::Binary {
                     op,
-                    Operand::Register(Register::R10),
-                    Operand::Stack(rhs),
-                ));
+                    lhs: Operand::Register(Register::R10),
+                    rhs: Operand::Stack(rhs),
+                });
             }
             Instruction::Idiv(Operand::Imm(val)) => {
                 new_instructions.push(Instruction::Mov {
@@ -125,21 +141,21 @@ mod tests {
 
     #[test]
     fn test_multiply() {
-        let input_instructions = vec![Instruction::Binary(
-            BinaryOperator::Mult,
-            Operand::Stack(4),
-            Operand::Stack(8),
-        )];
+        let input_instructions = vec![Instruction::Binary {
+            op: BinaryOperator::Mult,
+            lhs: Operand::Stack(4),
+            rhs: Operand::Stack(8),
+        }];
         let expected_instructions = vec![
             Instruction::Mov {
                 src: Operand::Stack(8),
                 dst: Operand::Register(Register::R11),
             },
-            Instruction::Binary(
-                BinaryOperator::Mult,
-                Operand::Stack(4),
-                Operand::Register(Register::R11),
-            ),
+            Instruction::Binary {
+                op: BinaryOperator::Mult,
+                lhs: Operand::Stack(4),
+                rhs: Operand::Register(Register::R11),
+            },
             Instruction::Mov {
                 src: Operand::Register(Register::R11),
                 dst: Operand::Stack(8),
