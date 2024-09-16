@@ -48,7 +48,18 @@ impl SecondPass {
                     self.pseudo_to_stack(op2);
                 }
                 Instruction::Idiv(operand) => self.pseudo_to_stack(operand),
-                Instruction::Cdq | Instruction::AllocateStack(_) => {}
+                Instruction::Cdq
+                | Instruction::AllocateStack(_)
+                | Instruction::Jmp(_)
+                | Instruction::JumpCC(_, _)
+                | Instruction::Label(_) => {}
+                Instruction::Cmp { lhs, rhs } => {
+                    self.pseudo_to_stack(lhs);
+                    self.pseudo_to_stack(rhs);
+                }
+                Instruction::SetCC(_, operand) => {
+                    self.pseudo_to_stack(operand);
+                }
             }
         }
 

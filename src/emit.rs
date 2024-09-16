@@ -1,7 +1,8 @@
 use std::env::consts::OS;
 
 use crate::assembly::{
-    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, RegisterBytes, UnaryOperator,
+    BinaryOperator, CondCode, FunctionDefinition, Instruction, Operand, Program, Register,
+    RegisterSize, UnaryOperator,
 };
 
 /// A Structure that implements this trait, can emit assembly using the provided function.
@@ -12,19 +13,31 @@ pub trait EmitAsm {
     fn emit(&self, indent_depth: u32) -> String;
 }
 
-impl EmitAsm for Operand {
-    fn emit(&self, _: u32) -> String {
+impl Operand {
+    fn emit(&self) -> String {
+        self.emit_size(RegisterSize::All)
+    }
+    fn emit_size(&self, size: RegisterSize) -> String {
         match self {
             Operand::Register(reg) => {
                 "%".to_owned()
                     + match reg {
-                        crate::assembly::Register::AX => "eax",
-                        crate::assembly::Register::R10 => "r10d",
-                        crate::assembly::Register::DX => "edx",
-                        crate::assembly::Register::R11 => "r11d",
-                        crate::assembly::Register::CX(bytes) => match bytes {
-                            RegisterBytes::All => "ecx",
-                            RegisterBytes::Lower => "cl",
+                        crate::assembly::Register::AX => match size {
+                                RegisterSize::All => "eax",
+                                RegisterSize::Lower => "al",
+                            },
+                        crate::assembly::Register::R10 => match size { RegisterSize::All => "r10d", RegisterSize::Lower => "r10d"},
+                        crate::assembly::Register::DX => match size {
+                            RegisterSize::All => "edx",
+                            RegisterSize::Lower => "al"
+                        },
+                        crate::assembly::Register::R11 => match size {
+                            RegisterSize::All => "r11d",
+                            RegisterSize::Lower => "r11b"
+                        },
+                        crate::assembly::Register::CX => match size {
+                            RegisterSize::All => "ecx",
+                            RegisterSize::Lower => "cl",
                         },
                     }
             }
@@ -40,34 +53,70 @@ impl EmitAsm for Instruction {
         let tabs = "\t".repeat(indent_depth as usize);
 
         match self {
-            Instruction::Mov { src, dst } => format!(
-                "{}movl {}, {}\n",
-                tabs,
-                src.emit(indent_depth),
-                dst.emit(indent_depth),
-            ),
+            Instruction::Mov { src, dst } => {
+                format!("{}movl {}, {}\n", tabs, src.emit(), dst.emit(),)
+            }
             Instruction::Ret => {
                 format!("{}movq %rbp, %rsp\n{}popq %rbp\n{}ret\n", tabs, tabs, tabs)
             }
             Instruction::Unary { op, operand } => {
-                format!(
-                    "{}{} {}\n",
-                    tabs,
-                    op.emit(indent_depth),
-                    operand.emit(indent_depth)
-                )
+                format!("{}{} {}\n", tabs, op.emit(indent_depth), operand.emit())
             }
             Instruction::AllocateStack(val) => format!("{}subq ${}, %rsp\n", tabs, *val),
-            Instruction::Binary { op: o, lhs, rhs } => format!(
+
+            Instruction::Binary {
+                op: op @ BinaryOperator::Sal | op @ BinaryOperator::Sar,
+                lhs,
+                rhs,
+            } => format!(
                 "{}{} {},{}\n",
                 tabs,
-                o.emit(indent_depth),
-                lhs.emit(indent_depth),
-                rhs.emit(indent_depth),
+                op.emit(indent_depth),
+                lhs.emit(),
+                match rhs {
+                    Operand::Register(Register::CX) => rhs.emit_size(RegisterSize::Lower),
+                    rhs => rhs.emit(),
+                },
             ),
-            Instruction::Idiv(op) => format!("{}idivl {}\n", tabs, op.emit(indent_depth)),
+
+            Instruction::Binary { op, lhs, rhs } => format!(
+                "{}{} {},{}\n",
+                tabs,
+                op.emit(indent_depth),
+                lhs.emit(),
+                rhs.emit(),
+            ),
+            Instruction::Idiv(op) => format!("{}idivl {}\n", tabs, op.emit()),
             Instruction::Cdq => "cdq\n".to_owned(),
+            Instruction::Cmp { lhs, rhs } => {
+                format!("{}cmpl {},{}\n", tabs, lhs.emit(), rhs.emit(),)
+            }
+            Instruction::Jmp(label) => format!("{}jmp .L{}\n", tabs, label),
+            Instruction::JumpCC(cond_code, label) => {
+                format!("{}j{} .L{}\n", tabs, cond_code.emit(indent_depth), label)
+            }
+            Instruction::SetCC(cond_code, operand) => format!(
+                "{}set{} {}\n",
+                tabs,
+                cond_code.emit(indent_depth),
+                operand.emit_size(RegisterSize::Lower)
+            ),
+            Instruction::Label(label) => format!(".L{}:\n", label),
         }
+    }
+}
+
+impl EmitAsm for CondCode {
+    fn emit(&self, _: u32) -> String {
+        match self {
+            CondCode::E => "e",
+            CondCode::NE => "ne",
+            CondCode::G => "g",
+            CondCode::GE => "ge",
+            CondCode::L => "l",
+            CondCode::LE => "le",
+        }
+        .to_owned()
     }
 }
 

@@ -55,7 +55,7 @@ pub enum Operand {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
-    CX(RegisterBytes),
+    CX,
     AX,
     DX,
     R10,
@@ -73,7 +73,7 @@ pub enum CondCode {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RegisterBytes {
+pub enum RegisterSize {
     Lower,
     All,
 }

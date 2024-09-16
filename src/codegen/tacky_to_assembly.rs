@@ -1,8 +1,6 @@
-use std::ffi::VaList;
-
 use crate::{
     assembly::{self, CondCode, Instruction, Operand, Register},
-    tacky,
+    tacky::{self, UnaryOperator},
 };
 
 pub(super) fn code_generation(program: tacky::Program) -> assembly::Program {
@@ -31,6 +29,21 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             },
             assembly::Instruction::Ret,
         ],
+        tacky::Instruction::Unary {
+            operator: UnaryOperator::Not,
+            src,
+            dst,
+        } => vec![
+            Instruction::Cmp {
+                lhs: Operand::Imm(0),
+                rhs: src.to_operand(),
+            },
+            Instruction::Mov {
+                src: Operand::Imm(0),
+                dst: Operand::Pseudo(dst.0.clone()),
+            },
+            Instruction::SetCC(CondCode::E, Operand::Pseudo(dst.0)),
+        ],
         tacky::Instruction::Unary { operator, src, dst } => vec![
             assembly::Instruction::Mov {
                 src: src.to_operand(),
@@ -43,14 +56,40 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         ],
         tacky::Instruction::Binary {
             op:
-                tacky::BinaryOperator::GreaterThan
-                | tacky::BinaryOperator::GreaterOrEqual
-                | tacky::BinaryOperator::LessThan
-                | tacky::BinaryOperator::LessOrEqual,
+                operand @ tacky::BinaryOperator::GreaterThan
+                | operand @ tacky::BinaryOperator::GreaterOrEqual
+                | operand @ tacky::BinaryOperator::LessThan
+                | operand @ tacky::BinaryOperator::LessOrEqual
+                | operand @ tacky::BinaryOperator::Equal
+                | operand @ tacky::BinaryOperator::NotEqual,
             lhs,
             rhs,
             dst,
-        } => vec![],
+        } => vec![
+            Instruction::Cmp {
+                lhs: rhs.to_operand(),
+                rhs: lhs.to_operand(),
+            },
+            Instruction::Mov {
+                src: Operand::Imm(0),
+                dst: assembly::Operand::Pseudo(dst.0.clone()),
+            },
+            Instruction::SetCC(
+                match operand {
+                    tacky::BinaryOperator::LessThan => CondCode::L,
+                    tacky::BinaryOperator::LessOrEqual => CondCode::LE,
+                    tacky::BinaryOperator::GreaterThan => CondCode::G,
+                    tacky::BinaryOperator::GreaterOrEqual => CondCode::GE,
+                    tacky::BinaryOperator::Equal => CondCode::E,
+                    tacky::BinaryOperator::NotEqual => CondCode::NE,
+                    op => unreachable!(
+                        "unreachable in assembly generation for relational operators: {:?}",
+                        op
+                    ),
+                },
+                assembly::Operand::Pseudo(dst.0),
+            ),
+        ],
         tacky::Instruction::Binary {
             op: tacky::BinaryOperator::Divide,
             lhs,
@@ -120,5 +159,18 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             },
             Instruction::JumpCC(CondCode::E, target),
         ],
+        tacky::Instruction::JumpIfNotZero(val, target) => vec![
+            Instruction::Cmp {
+                lhs: Operand::Imm(0),
+                rhs: val.to_operand(),
+            },
+            Instruction::JumpCC(CondCode::NE, target),
+        ],
+        tacky::Instruction::Copy(src, dst) => vec![Instruction::Mov {
+            src: src.to_operand(),
+            dst: dst.to_operand(),
+        }],
+        tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label)],
+        tacky::Instruction::Label(label) => vec![Instruction::Label(label)],
     }
 }
