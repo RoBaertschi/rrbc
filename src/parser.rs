@@ -4,13 +4,14 @@ use std::{
 };
 
 use crate::{
-    ast::{self, BinaryOperator, Expression},
+    ast::{self, BinaryOperator, BlockItem, Expression},
     lexer::{Lexer, LexerError, Token},
 };
 
 #[derive(PartialEq, PartialOrd)]
 enum Precedence {
     Lowest = 0,
+    Assignment,
     Or,
     And,
     BitwiseOr,
@@ -42,6 +43,7 @@ impl Precedence {
             Token::LessThan | Token::LessOrEqual | Token::GreaterThan | Token::GreaterOrEqual => {
                 Self::Ordered
             }
+            Token::Assign => Self::Assignment,
             _ => return None,
         })
     }
@@ -49,7 +51,8 @@ impl Precedence {
 
 #[derive(Debug)]
 pub enum ParserError {
-    /// 1. Is the expected token, 2. is the received token.
+    /// 1. Is the expected token
+    /// 2. is the received token
     /// Also, don't forget to not print the values, only the type should be printed.
     UnexpectedToken {
         expected: Token,
@@ -57,6 +60,8 @@ pub enum ParserError {
     },
     LexerError(LexerError),
     CouldNotParseStatement,
+    CouldNotParseDeclaration(Token),
+    DeclarationExpectedAssignOrSemicolon(Token),
     NoPrefixFunction(Token),
     NoUnaryOperatorFound(Token),
     NoBinaryOperatorFound(Token),
@@ -98,6 +103,10 @@ impl Parser {
         parser.register_prefix(
             mem::discriminant(&Token::OpenParen),
             Self::parse_grouped_expression,
+        );
+        parser.register_prefix(
+            mem::discriminant(&Token::Identifier(String::new())),
+            Self::parse_identifier,
         );
 
         // Infix
@@ -169,6 +178,10 @@ impl Parser {
         parser.register_infix(
             mem::discriminant(&Token::NotEqual),
             Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::Assign),
+            Self::parse_assignment_expression,
         );
 
         parser.next_token()?;
@@ -255,6 +268,18 @@ impl Parser {
         })
     }
 
+    fn parse_assignment_expression(
+        &mut self,
+        left: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        self.next_token()?;
+        let right = self.parse_expression(Precedence::Lowest)?;
+        Ok(Expression::Assignment {
+            lhs: Box::new(left),
+            rhs: Box::new(right),
+        })
+    }
+
     fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
         if let Token::Constant(val) = &self.cur_token {
             return Ok(ast::Expression::Constant(*val));
@@ -262,6 +287,17 @@ impl Parser {
 
         Err(ParserError::UnexpectedToken {
             expected: Token::Constant(0),
+            actual: self.cur_token.clone(),
+        })
+    }
+
+    fn parse_identifier(&mut self) -> Result<ast::Expression, ParserError> {
+        if let Token::Identifier(val) = self.cur_token.clone() {
+            return Ok(ast::Expression::Var(val));
+        }
+
+        Err(ParserError::UnexpectedToken {
+            expected: Token::Identifier(String::new()),
             actual: self.cur_token.clone(),
         })
     }
@@ -309,7 +345,12 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match self.cur_token {
             Token::KWReturn => self.parse_return_statement(),
-            _ => Err(ParserError::CouldNotParseStatement),
+            Token::Semicolon => Ok(ast::Statement::Null),
+            _ => {
+                let expr = self.parse_expression(Precedence::Lowest)?;
+                self.expect_peek(Token::Semicolon)?;
+                Ok(ast::Statement::Expression(expr))
+            }
         }
     }
 
@@ -323,6 +364,50 @@ impl Parser {
         Ok(ast::Statement::Return(expr))
     }
 
+    fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
+        match &self.cur_token {
+            Token::KWInt => {
+                self.next_token()?;
+
+                if let Token::Identifier(ident) = self.cur_token.clone() {
+                    self.next_token()?;
+                    match &self.cur_token {
+                        Token::Semicolon => Ok(ast::Declaration {
+                            name: ident,
+                            exp: None,
+                        }),
+                        Token::Assign => {
+                            self.next_token()?;
+                            let expr = self.parse_expression(self.cur_precedence())?;
+                            self.expect_peek(Token::Semicolon)?;
+                            Ok(ast::Declaration {
+                                name: ident,
+                                exp: Some(expr),
+                            })
+                        }
+                        tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
+                            tok.clone(),
+                        )),
+                    }
+                } else {
+                    Err(ParserError::UnexpectedToken {
+                        expected: Token::Identifier(String::new()),
+                        actual: self.cur_token.clone(),
+                    })
+                }
+            }
+            tok => Err(ParserError::CouldNotParseDeclaration(tok.clone())),
+        }
+    }
+
+    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
+        self.next_token()?;
+        match &self.cur_token {
+            Token::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
+            _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
+        }
+    }
+
     fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
         self.expect(Token::KWInt)?;
         if let Token::Identifier(name) = self.peek_token.clone() {
@@ -331,13 +416,16 @@ impl Parser {
             self.expect_peek(Token::KWVoid)?;
             self.expect_peek(Token::CloseParen)?;
             self.expect_peek(Token::OpenBrace)?;
-            self.next_token()?;
-            let statement: ast::Statement = self.parse_statement()?;
-            self.expect_peek(Token::CloseBrace)?;
+
+            let mut body: Vec<BlockItem> = vec![];
+            while !self.peek_token_is(&Token::CloseBrace) {
+                body.push(self.parse_block_item()?);
+            }
+            self.next_token()?; // Eat CloseBrace
 
             Ok(ast::FunctionDefinition {
                 name: name.to_string(),
-                body: statement,
+                body,
             })
         } else {
             Err(ParserError::UnexpectedToken {
@@ -367,10 +455,10 @@ impl Parser {
         if mem::discriminant(&expected) == mem::discriminant(&self.cur_token) {
             return Ok(());
         }
-        return Err(ParserError::UnexpectedToken {
+        Err(ParserError::UnexpectedToken {
             expected,
             actual: self.cur_token.clone(),
-        });
+        })
     }
 
     fn expect_peek(&mut self, expected: Token) -> Result<(), ParserError> {
@@ -378,15 +466,19 @@ impl Parser {
             self.next_token()?;
             return Ok(());
         }
-        return Err(ParserError::UnexpectedToken {
+        Err(ParserError::UnexpectedToken {
             expected,
             actual: self.cur_token.clone(),
-        });
+        })
     }
 
     fn peek_token_is(&self, token: &Token) -> bool {
         mem::discriminant(&self.peek_token) == mem::discriminant(token)
     }
+
+    //fn cur_token_is(&self, token: &Token) -> bool {
+    //    mem::discriminant(&self.cur_token) == mem::discriminant(token)
+    //}
 
     fn peek_precedence(&self) -> Precedence {
         Precedence::from_token(&self.peek_token).unwrap_or(Precedence::Lowest)
@@ -401,6 +493,29 @@ impl Parser {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn test_declaration() {
+        let lexer = Lexer::new("int main(void) { int a = hello; int b; }".to_owned());
+
+        let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
+
+        let program = parser.parse_program().expect("should successfully parse");
+
+        assert_eq!(
+            program.function_definition.body,
+            vec![
+                ast::BlockItem::D(ast::Declaration {
+                    name: "a".to_owned(),
+                    exp: Some(ast::Expression::Var("hello".to_owned()))
+                }),
+                ast::BlockItem::D(ast::Declaration {
+                    name: "b".to_owned(),
+                    exp: None,
+                }),
+            ]
+        );
+    }
 
     #[test]
     fn test_precedence1() {
@@ -421,14 +536,16 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary {
-                op: BinaryOperator::Multiply,
-                lhs: Box::new(Expression::Unary(
-                    ast::UnaryOperator::Negate,
-                    Box::new(Expression::Constant(2))
-                ),),
-                rhs: Box::new(Expression::Constant(2))
-            })
+            vec![ast::BlockItem::S(ast::Statement::Return(
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    lhs: Box::new(Expression::Unary(
+                        ast::UnaryOperator::Negate,
+                        Box::new(Expression::Constant(2))
+                    ),),
+                    rhs: Box::new(Expression::Constant(2))
+                }
+            ))]
         );
     }
 
@@ -451,17 +568,19 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary {
-                op: BinaryOperator::Multiply,
-                lhs: Box::new(Expression::Unary(
-                    ast::UnaryOperator::Negate,
-                    Box::new(Expression::Constant(2))
-                ),),
-                rhs: Box::new(Expression::Unary(
-                    ast::UnaryOperator::Complement,
-                    Box::new(Expression::Constant(2))
-                ))
-            })
+            vec![ast::BlockItem::S(ast::Statement::Return(
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    lhs: Box::new(Expression::Unary(
+                        ast::UnaryOperator::Negate,
+                        Box::new(Expression::Constant(2))
+                    ),),
+                    rhs: Box::new(Expression::Unary(
+                        ast::UnaryOperator::Complement,
+                        Box::new(Expression::Constant(2))
+                    ))
+                }
+            ))]
         );
     }
 
@@ -484,21 +603,23 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary {
-                op: BinaryOperator::Multiply,
-                lhs: Box::new(Expression::Unary(
-                    ast::UnaryOperator::Negate,
-                    Box::new(Expression::Constant(2))
-                ),),
-                rhs: Box::new(Expression::Binary {
+            vec![ast::BlockItem::S(ast::Statement::Return(
+                Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Complement,
+                        ast::UnaryOperator::Negate,
                         Box::new(Expression::Constant(2))
-                    )),
-                    rhs: Box::new(Expression::Constant(4))
-                })
-            })
+                    ),),
+                    rhs: Box::new(Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        lhs: Box::new(Expression::Unary(
+                            ast::UnaryOperator::Complement,
+                            Box::new(Expression::Constant(2))
+                        )),
+                        rhs: Box::new(Expression::Constant(4))
+                    })
+                }
+            ))]
         );
     }
 
@@ -521,18 +642,20 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            ast::Statement::Return(Expression::Binary {
-                op: BinaryOperator::Multiply,
-                lhs: Box::new(Expression::Binary {
-                    op: BinaryOperator::Subtract,
-                    lhs: Box::new(Expression::Constant(3)),
-                    rhs: Box::new(Expression::Constant(2))
-                },),
-                rhs: Box::new(Expression::Unary(
-                    ast::UnaryOperator::Complement,
-                    Box::new(Expression::Constant(2))
-                ))
-            })
+            vec![ast::BlockItem::S(ast::Statement::Return(
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    lhs: Box::new(Expression::Binary {
+                        op: BinaryOperator::Subtract,
+                        lhs: Box::new(Expression::Constant(3)),
+                        rhs: Box::new(Expression::Constant(2))
+                    },),
+                    rhs: Box::new(Expression::Unary(
+                        ast::UnaryOperator::Complement,
+                        Box::new(Expression::Constant(2))
+                    ))
+                }
+            ))]
         );
     }
     #[test]
@@ -551,19 +674,21 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = ast::Statement::Return(Expression::Binary {
-            op: BinaryOperator::ShiftRight,
-            lhs: Box::new(Expression::Binary {
-                op: BinaryOperator::ShiftLeft,
-                lhs: Box::new(Expression::Constant(40)),
-                rhs: Box::new(Expression::Binary {
-                    op: BinaryOperator::Add,
-                    lhs: Box::new(Expression::Constant(4)),
-                    rhs: Box::new(Expression::Constant(12)),
+        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+            Expression::Binary {
+                op: BinaryOperator::ShiftRight,
+                lhs: Box::new(Expression::Binary {
+                    op: BinaryOperator::ShiftLeft,
+                    lhs: Box::new(Expression::Constant(40)),
+                    rhs: Box::new(Expression::Binary {
+                        op: BinaryOperator::Add,
+                        lhs: Box::new(Expression::Constant(4)),
+                        rhs: Box::new(Expression::Constant(12)),
+                    }),
                 }),
-            }),
-            rhs: Box::new(Expression::Constant(1)),
-        });
+                rhs: Box::new(Expression::Constant(1)),
+            },
+        ))];
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
@@ -585,23 +710,25 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = ast::Statement::Return(Expression::Binary {
-            op: BinaryOperator::BitwiseOr,
-            lhs: Box::new(Expression::Binary {
-                op: BinaryOperator::Xor,
+        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+            Expression::Binary {
+                op: BinaryOperator::BitwiseOr,
                 lhs: Box::new(Expression::Binary {
-                    op: BinaryOperator::BitwiseAnd,
+                    op: BinaryOperator::Xor,
                     lhs: Box::new(Expression::Binary {
-                        op: BinaryOperator::ShiftLeft,
-                        lhs: Box::new(Expression::Constant(1)),
-                        rhs: Box::new(Expression::Constant(2)),
+                        op: BinaryOperator::BitwiseAnd,
+                        lhs: Box::new(Expression::Binary {
+                            op: BinaryOperator::ShiftLeft,
+                            lhs: Box::new(Expression::Constant(1)),
+                            rhs: Box::new(Expression::Constant(2)),
+                        }),
+                        rhs: Box::new(Expression::Constant(3)),
                     }),
-                    rhs: Box::new(Expression::Constant(3)),
+                    rhs: Box::new(Expression::Constant(2)),
                 }),
-                rhs: Box::new(Expression::Constant(2)),
-            }),
-            rhs: Box::new(Expression::Constant(3)),
-        });
+                rhs: Box::new(Expression::Constant(3)),
+            },
+        ))];
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);

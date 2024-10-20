@@ -38,6 +38,7 @@ pub enum Token {
     GreaterThan,    // >
     LessOrEqual,    // <=
     GreaterOrEqual, // >=
+    Assign,         // =
 
     // Keywords
     KWInt,
@@ -211,9 +212,13 @@ impl Lexer {
                     Token::Minus
                 }
             }
-            b'=' if self.peek_char() == b'=' => {
-                self.read_char();
-                Token::Equal
+            b'=' => {
+                if self.peek_char() == b'=' {
+                    self.read_char();
+                    Token::Equal
+                } else {
+                    Token::Assign
+                }
             }
             0 => return Ok(Token::Eof),
             _ => {

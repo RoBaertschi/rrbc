@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+thiserror = "1.0.64"
+
+# For debugging
+[features]
+default = ["validate"]
+validate = []
+tacky = ["validate"]
+codegen = ["tacky"]
+emit = ["codegen"]

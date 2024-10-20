@@ -1,10 +1,16 @@
+#[cfg(feature = "codegen")]
 pub mod assembly;
 pub mod ast;
+#[cfg(feature = "codegen")]
 pub mod codegen;
 pub mod driver;
+#[cfg(feature = "emit")]
 pub mod emit;
 pub mod lexer;
 pub mod parser;
+pub mod semantic_analysis;
+#[cfg(feature = "tacky")]
 pub mod tackler;
+#[cfg(feature = "tacky")]
 pub mod tacky;
 pub mod unique_id;

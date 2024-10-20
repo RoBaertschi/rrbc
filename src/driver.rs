@@ -10,12 +10,19 @@ use std::{
 };
 
 use crate::{
-    assembly, ast, codegen,
-    emit::EmitAsm,
+    ast,
     lexer::{self, LexerError},
     parser::{self, ParserError},
-    tackler, tacky,
 };
+
+#[cfg(feature = "validate")]
+use crate::semantic_analysis::variable_resolution::{self, VariableResolutionError};
+
+#[cfg(feature = "codegen")]
+use crate::{assembly, codegen, emit::EmitAsm};
+
+#[cfg(feature = "tacky")]
+use crate::{tackler, tacky};
 
 #[derive(Debug)]
 pub enum DriverExecutionError {
@@ -27,6 +34,7 @@ pub enum DriverExecutionError {
     AssemblerNoFile,
     Lexer(LexerError),
     Parser(ParserError),
+    VariableResolutionError(VariableResolutionError),
 }
 
 impl Display for DriverExecutionError {
@@ -55,12 +63,19 @@ impl From<ParserError> for DriverExecutionError {
     }
 }
 
+impl From<VariableResolutionError> for DriverExecutionError {
+    fn from(value: VariableResolutionError) -> Self {
+        Self::VariableResolutionError(value)
+    }
+}
+
 #[derive(Default)]
 pub enum Stage {
     #[default]
     Compile,
     Lex,
     Parse,
+    Validate,
     Tacky,
     Codegen,
     Assembly,
@@ -79,7 +94,7 @@ pub struct Options {
 
 fn print_help(file: Option<String>) -> ! {
     println!(
-        "{} FILE [--lex | --parse | --codegen | -S]",
+        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S]",
         file.unwrap_or("rbc (could not extract executable path.)".to_string())
     );
     process::exit(1)
@@ -92,6 +107,7 @@ fn is_flag(string: &str) -> Option<Stage> {
         "--codegen" => Some(Stage::Codegen),
         "-S" => Some(Stage::Assembly),
         "--tacky" => Some(Stage::Tacky),
+        "--validate" => Some(Stage::Validate),
         _ => None,
     }
 }
@@ -135,11 +151,7 @@ impl Options {
                     }
                 }
                 Err(err) => {
-                    println!(
-                        "could not parse path {} because of {}",
-                        arg,
-                        err.to_string()
-                    );
+                    println!("could not parse path {} because of {}", arg, err);
                     process::exit(1);
                 }
             }
@@ -158,14 +170,14 @@ impl Options {
         let mut output_file = input_file.clone();
         output_file.set_extension("");
 
-        return Self {
+        Self {
             stage: goal,
             input_file,
             preprocessed_file,
             assembly_file,
             output_file,
             ..Default::default()
-        };
+        }
     }
 
     pub fn run_preprocessor(&self) -> Result<(), DriverExecutionError> {
@@ -245,7 +257,16 @@ impl Options {
         Ok(program)
     }
 
+    #[cfg(feature = "validate")]
+    pub fn run_validator(
+        &mut self,
+        program: ast::Program,
+    ) -> Result<ast::Program, DriverExecutionError> {
+        Ok(variable_resolution::resolve_program(program)?)
+    }
+
     /// Runs the code gen without creating the file.
+    #[cfg(feature = "codegen")]
     pub fn run_code_gen(
         &self,
         ast_program: tacky::Program,
@@ -259,6 +280,7 @@ impl Options {
         Ok(program)
     }
 
+    #[cfg(feature = "codegen")]
     pub fn run_assembly_emission(
         &self,
         program: assembly::Program,
@@ -288,35 +310,49 @@ pub fn run() -> Result<(), DriverExecutionError> {
         return Ok(());
     }
 
-    let program = opts.run_parser()?;
+    let mut program = opts.run_parser()?;
 
     if let Stage::Parse = opts.stage {
+        println!("{:?}", program);
         return Ok(());
     }
 
-    let program = tackler::emit_tacky_program(program);
+    #[cfg(feature = "validate")]
+    {
+        program = opts.run_validator(program)?;
+        _ = program;
 
-    if let Stage::Tacky = opts.stage {
-        println!("{:#?}", program);
-        return Ok(());
-    }
+        if let Stage::Validate = opts.stage {
+            return Ok(());
+        }
 
-    let program = opts.run_code_gen(program)?;
+        #[cfg(feature = "tacky")]
+        {
+            let program = tackler::emit_tacky_program(program);
 
-    if let Stage::Codegen = opts.stage {
-        return Ok(());
-    }
+            if let Stage::Tacky = opts.stage {
+                println!("{:#?}", program);
+                return Ok(());
+            }
 
-    opts.run_assembly_emission(program)?;
+            let program = opts.run_code_gen(program)?;
 
-    if let Stage::Compile = opts.stage {
-        opts.run_assembler()?;
+            if let Stage::Codegen = opts.stage {
+                return Ok(());
+            }
 
-        if let Err(err) = fs::remove_file(&opts.assembly_file) {
-            eprintln!(
-                "WARN: Could not remove the file {:?} due to {}, finishing...",
-                &opts.assembly_file, err
-            )
+            opts.run_assembly_emission(program)?;
+
+            if let Stage::Compile = opts.stage {
+                opts.run_assembler()?;
+
+                if let Err(err) = fs::remove_file(&opts.assembly_file) {
+                    eprintln!(
+                        "WARN: Could not remove the file {:?} due to {}, finishing...",
+                        &opts.assembly_file, err
+                    )
+                }
+            }
         }
     }
 
