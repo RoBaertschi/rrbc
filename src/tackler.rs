@@ -79,6 +79,18 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
             }]);
             (instructions, dst)
         }
+        ast::Expression::Var(v) => (vec![], Value::Var(Var(v))),
+        ast::Expression::Assignment { lhs, rhs } => match *lhs {
+            ast::Expression::Var(v) => {
+                let (mut instructions, value) = emit_tacky_expression(*rhs);
+                instructions.append(&mut vec![Instruction::Copy(
+                    value,
+                    Value::Var(Var(v.clone())),
+                )]);
+                (instructions, Value::Var(Var(v)))
+            }
+            _ => unreachable!("Ran into an assignment with invalid lhs"),
+        },
     }
 }
 
@@ -89,11 +101,40 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             inners_ins.push(Instruction::Return(v));
             inners_ins
         }
+        ast::Statement::Expression(expression) => emit_tacky_expression(expression).0,
+        ast::Statement::Null => vec![],
+    }
+}
+
+pub fn emit_tacky_declaration(declaration: ast::Declaration) -> Vec<Instruction> {
+    if let Some(expr) = declaration.exp {
+        let (mut instructions, value) = emit_tacky_expression(expr);
+        instructions.append(&mut vec![Instruction::Copy(
+            value,
+            Value::Var(Var(declaration.name)),
+        )]);
+        instructions
+    } else {
+        vec![]
+    }
+}
+
+pub fn emit_tacky_block_item(block_item: ast::BlockItem) -> Vec<Instruction> {
+    match block_item {
+        ast::BlockItem::S(statement) => emit_tacky_statement(statement),
+        ast::BlockItem::D(declaration) => emit_tacky_declaration(declaration),
     }
 }
 
 pub fn emit_tacky_function(func: ast::FunctionDefinition) -> FunctionDefiniton {
-    let body = emit_tacky_statement(func.body);
+    let mut body = vec![];
+
+    for stmt in func.body {
+        body.append(&mut emit_tacky_block_item(stmt));
+    }
+
+    body.append(&mut vec![Instruction::Return(Value::Constant(0))]);
+
     FunctionDefiniton {
         identifier: func.name,
         body,
