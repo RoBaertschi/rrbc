@@ -22,7 +22,6 @@ pub enum Token {
     Asterisk,       // *
     Slash,          // /
     Percent,        // %
-    Decrement,      // --
     Tilde,          // ~
     BitwiseAnd,     // &
     BitwiseOr,      // |
@@ -39,6 +38,21 @@ pub enum Token {
     LessOrEqual,    // <=
     GreaterOrEqual, // >=
     Assign,         // =
+
+    // Compound Assignment
+    PlusEqual,              // +=
+    MinusEqual,             // -=
+    AsteriskEqual,          // *=
+    SlashEqual,             // /=
+    PercentEqual,           // %=
+    BitwiseAndEqual,        // &=
+    BitwiseOrEqual,         // |=
+    BitwiseXorEqual,        // ^=
+    BitwiseShiftLeftEqual,  // <<=
+    BitwiseShiftRightEqual, // >>=
+
+    Decrement, // --
+    Increment, // ++
 
     // Keywords
     KWInt,
@@ -156,15 +170,57 @@ impl Lexer {
             b'}' => Token::CloseBrace,
             b';' => Token::Semicolon,
             b'~' => Token::Tilde,
-            b'+' => Token::Plus,
-            b'*' => Token::Asterisk,
-            b'/' => Token::Slash,
-            b'%' => Token::Percent,
-            b'^' => Token::Xor,
+            b'+' => match self.peek_char() {
+                b'+' => {
+                    self.read_char();
+                    Token::Increment
+                }
+                b'=' => {
+                    self.read_char();
+                    Token::PlusEqual
+                }
+                _ => Token::Plus,
+            },
+            b'-' => match self.peek_char() {
+                b'-' => {
+                    self.read_char();
+                    Token::Decrement
+                }
+                b'=' => {
+                    self.read_char();
+                    Token::MinusEqual
+                }
+                _ => Token::Minus,
+            },
+            b'*' => match self.peek_char() {
+                b'=' => {
+                    self.read_char();
+                    Token::AsteriskEqual
+                }
+                _ => Token::Asterisk,
+            },
+            b'/' => match self.peek_char() {
+                b'=' => {
+                    self.read_char();
+                    Token::SlashEqual
+                }
+                _ => Token::Slash,
+            },
+            b'%' => match self.peek_char() {
+                b'=' => {
+                    self.read_char();
+                    Token::PercentEqual
+                }
+                _ => Token::Percent,
+            },
             b'|' => match self.peek_char() {
                 b'|' => {
                     self.read_char();
                     Token::Or
+                }
+                b'=' => {
+                    self.read_char();
+                    Token::BitwiseOrEqual
                 }
                 _ => Token::BitwiseOr,
             },
@@ -173,7 +229,18 @@ impl Lexer {
                     self.read_char();
                     Token::And
                 }
+                b'=' => {
+                    self.read_char();
+                    Token::BitwiseAndEqual
+                }
                 _ => Token::BitwiseAnd,
+            },
+            b'^' => match self.peek_char() {
+                b'=' => {
+                    self.read_char();
+                    Token::BitwiseXorEqual
+                }
+                _ => Token::Xor,
             },
             b'!' => match self.peek_char() {
                 b'=' => {
@@ -185,7 +252,12 @@ impl Lexer {
             b'<' => match self.peek_char() {
                 b'<' => {
                     self.read_char();
-                    Token::ShiftLeft
+                    if self.peek_char() == b'=' {
+                        self.read_char();
+                        Token::BitwiseShiftLeftEqual
+                    } else {
+                        Token::ShiftLeft
+                    }
                 }
                 b'=' => {
                     self.read_char();
@@ -196,7 +268,12 @@ impl Lexer {
             b'>' => match self.peek_char() {
                 b'>' => {
                     self.read_char();
-                    Token::ShiftRight
+                    if self.peek_char() == b'=' {
+                        self.read_char();
+                        Token::BitwiseShiftRightEqual
+                    } else {
+                        Token::ShiftRight
+                    }
                 }
                 b'=' => {
                     self.read_char();
@@ -204,14 +281,6 @@ impl Lexer {
                 }
                 _ => Token::GreaterThan,
             },
-            b'-' => {
-                if self.peek_char() == b'-' {
-                    self.next_token()?;
-                    Token::Decrement
-                } else {
-                    Token::Minus
-                }
-            }
             b'=' => {
                 if self.peek_char() == b'=' {
                     self.read_char();
@@ -277,6 +346,37 @@ mod tests {
             Token::Semicolon,
             Token::CloseBrace,
             Token::Eof,
+        ];
+
+        for expected_token in expected {
+            let token = lexer.next_token().expect("should return token");
+
+            assert_eq!(expected_token, token);
+        }
+    }
+
+    #[test]
+    fn test_all_compound_assignment() {
+        let mut lexer = Lexer::new(
+            r"
+        += -= *= /= %= &= |= ^= <<= >>= ++ --
+        "
+            .to_owned(),
+        );
+
+        let expected: Vec<_> = vec![
+            Token::PlusEqual,
+            Token::MinusEqual,
+            Token::AsteriskEqual,
+            Token::SlashEqual,
+            Token::PercentEqual,
+            Token::BitwiseAndEqual,
+            Token::BitwiseOrEqual,
+            Token::BitwiseXorEqual,
+            Token::BitwiseShiftLeftEqual,
+            Token::BitwiseShiftRightEqual,
+            Token::Increment,
+            Token::Decrement,
         ];
 
         for expected_token in expected {

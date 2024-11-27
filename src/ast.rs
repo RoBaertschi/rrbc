@@ -20,6 +20,20 @@ pub enum Expression {
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum AssignmentOperator {
+    None,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Reminder,
+    BitwiseAnd,
+    BitwiseXor,
+    ShiftLeft,
+    ShiftRight,
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Add,
     Subtract,
