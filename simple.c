@@ -1,7 +1,8 @@
 int main(void) {
-    int main = 544;
+    int main = 1;
     int main2 = 2;
 
-    return (main << main2);
+    main += main2;
 
+    return main;
 }

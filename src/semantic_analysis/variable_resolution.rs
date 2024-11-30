@@ -90,8 +90,9 @@ pub fn resolve_expression(
     expr: Expression,
 ) -> Result<Expression, VariableResolutionError> {
     Ok(match expr {
-        Expression::Assignment { lhs, rhs } => match *lhs {
+        Expression::Assignment { lhs, rhs, op } => match *lhs {
             Expression::Var(name) => Expression::Assignment {
+                op,
                 lhs: Box::new(Expression::Var(
                     variable_map
                         .get(&name)

@@ -1,12 +1,68 @@
 use crate::{
     ast::{self, BinaryOperator},
-    tacky::{FunctionDefiniton, Instruction, Program, Value, Var},
+    tacky::{self, FunctionDefiniton, Instruction, Program, Value, Var},
     unique_id,
 };
 
 pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value) {
     match expr {
         ast::Expression::Constant(val) => (vec![], Value::Constant(val)),
+        ast::Expression::Unary(ast::UnaryOperator::Increment, expr) => {
+            let (mut instructions, value) = emit_tacky_expression(*expr);
+
+            match value {
+                Value::Constant(constant) => {
+                    let dst_name = unique_id::temp_variable_name();
+                    let dst = Value::Var(Var(dst_name.clone()));
+
+                    instructions.append(&mut vec![Instruction::Binary {
+                        op: tacky::BinaryOperator::Add,
+                        lhs: value,
+                        rhs: Value::Constant(1),
+                        dst: Var(dst_name.clone()),
+                    }]);
+                    (instructions, dst)
+                }
+                Value::Var(var) => {
+                    instructions.append(&mut vec![Instruction::Binary {
+                        op: tacky::BinaryOperator::Add,
+                        lhs: Value::Var(var.clone()),
+                        rhs: Value::Constant(1),
+                        dst: var.clone(),
+                    }]);
+
+                    (instructions, Value::Var(var))
+                }
+            }
+        }
+        ast::Expression::Unary(ast::UnaryOperator::Decrement, expr) => {
+            let (mut instructions, value) = emit_tacky_expression(*expr);
+
+            match value {
+                Value::Constant(constant) => {
+                    let dst_name = unique_id::temp_variable_name();
+                    let dst = Value::Var(Var(dst_name.clone()));
+
+                    instructions.append(&mut vec![Instruction::Binary {
+                        op: tacky::BinaryOperator::Subtract,
+                        lhs: value,
+                        rhs: Value::Constant(1),
+                        dst: Var(dst_name.clone()),
+                    }]);
+                    (instructions, dst)
+                }
+                Value::Var(var) => {
+                    instructions.append(&mut vec![Instruction::Binary {
+                        op: tacky::BinaryOperator::Subtract,
+                        lhs: Value::Var(var.clone()),
+                        rhs: Value::Constant(1),
+                        dst: var.clone(),
+                    }]);
+
+                    (instructions, Value::Var(var))
+                }
+            }
+        }
         ast::Expression::Unary(op, expr) => {
             let (mut inner_ins, val) = emit_tacky_expression(*expr);
             let dst_name = unique_id::temp_variable_name();
@@ -80,17 +136,33 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
             (instructions, dst)
         }
         ast::Expression::Var(v) => (vec![], Value::Var(Var(v))),
-        ast::Expression::Assignment { lhs, rhs } => match *lhs {
+        // WARN: lhs should only be evaluated once!
+        ast::Expression::Assignment { op, lhs, rhs } => match *lhs {
             ast::Expression::Var(v) => {
                 let (mut instructions, value) = emit_tacky_expression(*rhs);
-                instructions.append(&mut vec![Instruction::Copy(
-                    value,
-                    Value::Var(Var(v.clone())),
-                )]);
+                match op {
+                    ast::AssignmentOperator::None => {
+                        instructions.append(&mut vec![Instruction::Copy(
+                            value,
+                            Value::Var(Var(v.clone())),
+                        )]);
+                    }
+                    op => {
+                        instructions.append(&mut vec![Instruction::Binary {
+                            op: op.to_tacky(),
+                            lhs: Value::Var(Var(v.clone())),
+                            rhs: value,
+                            dst: Var(v.clone()),
+                        }]);
+                    }
+                }
                 (instructions, Value::Var(Var(v)))
             }
             _ => unreachable!("Ran into an assignment with invalid lhs"),
         },
+        ast::Expression::Postfix(postfix_operator, expression) => {
+            todo!()
+        }
     }
 }
 

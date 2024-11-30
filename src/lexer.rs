@@ -37,19 +37,19 @@ pub enum Token {
     GreaterThan,    // >
     LessOrEqual,    // <=
     GreaterOrEqual, // >=
-    Assign,         // =
 
     // Compound Assignment
-    PlusEqual,              // +=
-    MinusEqual,             // -=
-    AsteriskEqual,          // *=
-    SlashEqual,             // /=
-    PercentEqual,           // %=
-    BitwiseAndEqual,        // &=
-    BitwiseOrEqual,         // |=
-    BitwiseXorEqual,        // ^=
-    BitwiseShiftLeftEqual,  // <<=
-    BitwiseShiftRightEqual, // >>=
+    Assign,                  // =
+    PlusAssign,              // +=
+    MinusAssign,             // -=
+    AsteriskAssign,          // *=
+    SlashAssign,             // /=
+    PercentAssign,           // %=
+    BitwiseAndAssign,        // &=
+    BitwiseOrAssign,         // |=
+    BitwiseXorAssign,        // ^=
+    BitwiseShiftLeftAssign,  // <<=
+    BitwiseShiftRightAssign, // >>=
 
     Decrement, // --
     Increment, // ++
@@ -177,7 +177,7 @@ impl Lexer {
                 }
                 b'=' => {
                     self.read_char();
-                    Token::PlusEqual
+                    Token::PlusAssign
                 }
                 _ => Token::Plus,
             },
@@ -188,28 +188,28 @@ impl Lexer {
                 }
                 b'=' => {
                     self.read_char();
-                    Token::MinusEqual
+                    Token::MinusAssign
                 }
                 _ => Token::Minus,
             },
             b'*' => match self.peek_char() {
                 b'=' => {
                     self.read_char();
-                    Token::AsteriskEqual
+                    Token::AsteriskAssign
                 }
                 _ => Token::Asterisk,
             },
             b'/' => match self.peek_char() {
                 b'=' => {
                     self.read_char();
-                    Token::SlashEqual
+                    Token::SlashAssign
                 }
                 _ => Token::Slash,
             },
             b'%' => match self.peek_char() {
                 b'=' => {
                     self.read_char();
-                    Token::PercentEqual
+                    Token::PercentAssign
                 }
                 _ => Token::Percent,
             },
@@ -220,7 +220,7 @@ impl Lexer {
                 }
                 b'=' => {
                     self.read_char();
-                    Token::BitwiseOrEqual
+                    Token::BitwiseOrAssign
                 }
                 _ => Token::BitwiseOr,
             },
@@ -231,14 +231,14 @@ impl Lexer {
                 }
                 b'=' => {
                     self.read_char();
-                    Token::BitwiseAndEqual
+                    Token::BitwiseAndAssign
                 }
                 _ => Token::BitwiseAnd,
             },
             b'^' => match self.peek_char() {
                 b'=' => {
                     self.read_char();
-                    Token::BitwiseXorEqual
+                    Token::BitwiseXorAssign
                 }
                 _ => Token::Xor,
             },
@@ -254,7 +254,7 @@ impl Lexer {
                     self.read_char();
                     if self.peek_char() == b'=' {
                         self.read_char();
-                        Token::BitwiseShiftLeftEqual
+                        Token::BitwiseShiftLeftAssign
                     } else {
                         Token::ShiftLeft
                     }
@@ -270,7 +270,7 @@ impl Lexer {
                     self.read_char();
                     if self.peek_char() == b'=' {
                         self.read_char();
-                        Token::BitwiseShiftRightEqual
+                        Token::BitwiseShiftRightAssign
                     } else {
                         Token::ShiftRight
                     }
@@ -365,16 +365,16 @@ mod tests {
         );
 
         let expected: Vec<_> = vec![
-            Token::PlusEqual,
-            Token::MinusEqual,
-            Token::AsteriskEqual,
-            Token::SlashEqual,
-            Token::PercentEqual,
-            Token::BitwiseAndEqual,
-            Token::BitwiseOrEqual,
-            Token::BitwiseXorEqual,
-            Token::BitwiseShiftLeftEqual,
-            Token::BitwiseShiftRightEqual,
+            Token::PlusAssign,
+            Token::MinusAssign,
+            Token::AsteriskAssign,
+            Token::SlashAssign,
+            Token::PercentAssign,
+            Token::BitwiseAndAssign,
+            Token::BitwiseOrAssign,
+            Token::BitwiseXorAssign,
+            Token::BitwiseShiftLeftAssign,
+            Token::BitwiseShiftRightAssign,
             Token::Increment,
             Token::Decrement,
         ];

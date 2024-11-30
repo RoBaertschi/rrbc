@@ -14,9 +14,17 @@ pub enum Expression {
         rhs: Box<Expression>,
     },
     Assignment {
+        op: AssignmentOperator,
         lhs: Box<Expression>,
         rhs: Box<Expression>,
     },
+    Postfix(PostfixOperator, Box<Expression>),
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum PostfixOperator {
+    Increment,
+    Decrement,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -28,9 +36,31 @@ pub enum AssignmentOperator {
     Divide,
     Reminder,
     BitwiseAnd,
+    BitwiseOr,
     BitwiseXor,
     ShiftLeft,
     ShiftRight,
+}
+
+impl AssignmentOperator {
+    #[cfg(feature = "tacky")]
+    pub fn to_tacky(&self) -> tacky::BinaryOperator {
+        match self {
+            AssignmentOperator::None => unreachable!(
+                "It is not possible to create a binary operator from a None AssignmentOperator"
+            ),
+            AssignmentOperator::Add => tacky::BinaryOperator::Add,
+            AssignmentOperator::Subtract => tacky::BinaryOperator::Subtract,
+            AssignmentOperator::Multiply => tacky::BinaryOperator::Multiply,
+            AssignmentOperator::Divide => tacky::BinaryOperator::Divide,
+            AssignmentOperator::Reminder => tacky::BinaryOperator::Remainder,
+            AssignmentOperator::BitwiseOr => tacky::BinaryOperator::BitwiseOr,
+            AssignmentOperator::BitwiseAnd => tacky::BinaryOperator::BitwiseAnd,
+            AssignmentOperator::BitwiseXor => tacky::BinaryOperator::Xor,
+            AssignmentOperator::ShiftLeft => tacky::BinaryOperator::Sal,
+            AssignmentOperator::ShiftRight => tacky::BinaryOperator::Sar,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -86,6 +116,8 @@ pub enum UnaryOperator {
     Complement,
     Negate,
     Not,
+    Increment,
+    Decrement,
 }
 
 impl UnaryOperator {
@@ -95,6 +127,9 @@ impl UnaryOperator {
             UnaryOperator::Complement => tacky::UnaryOperator::Complement,
             UnaryOperator::Negate => tacky::UnaryOperator::Negate,
             UnaryOperator::Not => tacky::UnaryOperator::Not,
+            UnaryOperator::Increment | UnaryOperator::Decrement => {
+                unreachable!("Increment and Decrement are not supported to be represented in a Tacky UnaryOperator")
+            }
         }
     }
 }

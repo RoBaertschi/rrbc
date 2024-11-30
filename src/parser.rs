@@ -43,7 +43,17 @@ impl Precedence {
             Token::LessThan | Token::LessOrEqual | Token::GreaterThan | Token::GreaterOrEqual => {
                 Self::Ordered
             }
-            Token::Assign => Self::Assignment,
+            Token::Assign
+            | Token::PlusAssign
+            | Token::MinusAssign
+            | Token::AsteriskAssign
+            | Token::SlashAssign
+            | Token::PercentAssign
+            | Token::BitwiseAndAssign
+            | Token::BitwiseOrAssign
+            | Token::BitwiseXorAssign
+            | Token::BitwiseShiftLeftAssign
+            | Token::BitwiseShiftRightAssign => Self::Assignment,
             _ => return None,
         })
     }
@@ -63,6 +73,7 @@ pub enum ParserError {
     CouldNotParseDeclaration(Token),
     DeclarationExpectedAssignOrSemicolon(Token),
     NoPrefixFunction(Token),
+    NoPostfixOperatorFound(Token),
     NoUnaryOperatorFound(Token),
     NoBinaryOperatorFound(Token),
 }
@@ -74,6 +85,7 @@ impl From<LexerError> for ParserError {
 }
 
 type PrefixFunction = fn(&mut Parser) -> Result<ast::Expression, ParserError>;
+type PostfixFunction = fn(&mut Parser, ast::Expression) -> Result<ast::Expression, ParserError>;
 type InfixFunction = fn(&mut Parser, ast::Expression) -> Result<ast::Expression, ParserError>;
 
 #[derive(Debug)]
@@ -82,6 +94,7 @@ pub struct Parser {
     cur_token: Token,
     peek_token: Token,
     prefix_functions: HashMap<Discriminant<Token>, PrefixFunction>,
+    postfix_functions: HashMap<Discriminant<Token>, PostfixFunction>,
     infix_functions: HashMap<Discriminant<Token>, InfixFunction>,
 }
 
@@ -92,6 +105,7 @@ impl Parser {
             cur_token: Token::Eof,
             peek_token: Token::Eof,
             prefix_functions: HashMap::new(),
+            postfix_functions: HashMap::new(),
             infix_functions: HashMap::new(),
         };
 
@@ -100,6 +114,8 @@ impl Parser {
         parser.register_prefix(mem::discriminant(&Token::Minus), Self::parse_unary);
         parser.register_prefix(mem::discriminant(&Token::Tilde), Self::parse_unary);
         parser.register_prefix(mem::discriminant(&Token::Not), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&Token::Increment), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&Token::Decrement), Self::parse_unary);
         parser.register_prefix(
             mem::discriminant(&Token::OpenParen),
             Self::parse_grouped_expression,
@@ -183,6 +199,49 @@ impl Parser {
             mem::discriminant(&Token::Assign),
             Self::parse_assignment_expression,
         );
+        parser.register_infix(
+            mem::discriminant(&Token::PlusAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::MinusAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::AsteriskAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::SlashAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::PercentAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseAndAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseOrAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseXorAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseShiftLeftAssign),
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&Token::BitwiseShiftRightAssign),
+            Self::parse_assignment_expression,
+        );
+
+        parser.register_postfix(mem::discriminant(&Token::Increment), Self::parse_postfix);
+        parser.register_postfix(mem::discriminant(&Token::Decrement), Self::parse_postfix);
 
         parser.next_token()?;
         parser.next_token()?;
@@ -221,8 +280,24 @@ impl Parser {
                             .get(&mem::discriminant(&self.cur_token))
                             .unwrap()(self, left_exp)?;
                     } else {
+                        let postfix = self
+                            .postfix_functions
+                            .get(&mem::discriminant(&self.cur_token));
+
+                        if let Some(postfix) = postfix {
+                            left_exp = postfix(self, left_exp)?;
+                        }
+
                         return Ok(left_exp);
                     }
+                }
+
+                let postfix = self
+                    .postfix_functions
+                    .get(&mem::discriminant(&self.cur_token));
+
+                if let Some(postfix) = postfix {
+                    left_exp = postfix(self, left_exp)?;
                 }
 
                 Ok(left_exp)
@@ -272,9 +347,27 @@ impl Parser {
         &mut self,
         left: ast::Expression,
     ) -> Result<ast::Expression, ParserError> {
+        let op: ast::AssignmentOperator = match self.cur_token {
+            Token::Assign => ast::AssignmentOperator::None,
+            Token::PlusAssign => ast::AssignmentOperator::Add,
+            Token::MinusAssign => ast::AssignmentOperator::Subtract,
+            Token::AsteriskAssign => ast::AssignmentOperator::Multiply,
+            Token::SlashAssign => ast::AssignmentOperator::Divide,
+            Token::PercentAssign => ast::AssignmentOperator::Reminder,
+            Token::BitwiseAndAssign => ast::AssignmentOperator::BitwiseAnd,
+            Token::BitwiseOrAssign => ast::AssignmentOperator::BitwiseOr,
+            Token::BitwiseXorAssign => ast::AssignmentOperator::BitwiseXor,
+            Token::BitwiseShiftLeftAssign => ast::AssignmentOperator::ShiftLeft,
+            Token::BitwiseShiftRightAssign => ast::AssignmentOperator::ShiftRight,
+            _ => unreachable!(
+                "Wrong token passed to parse_assignment_expression, should not happen."
+            ),
+        };
+
         self.next_token()?;
         let right = self.parse_expression(Precedence::Lowest)?;
         Ok(Expression::Assignment {
+            op,
             lhs: Box::new(left),
             rhs: Box::new(right),
         })
@@ -328,7 +421,43 @@ impl Parser {
                     Box::new(expr),
                 ))
             }
+            Token::Increment => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary(
+                    ast::UnaryOperator::Increment,
+                    Box::new(expr),
+                ))
+            }
+            Token::Decrement => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary(
+                    ast::UnaryOperator::Decrement,
+                    Box::new(expr),
+                ))
+            }
             _ => Err(ParserError::NoUnaryOperatorFound(self.cur_token.clone())),
+        }
+    }
+
+    fn parse_postfix(&mut self, lhs: ast::Expression) -> Result<ast::Expression, ParserError> {
+        match &self.cur_token {
+            Token::Increment => {
+                self.next_token()?;
+                Ok(ast::Expression::Postfix(
+                    ast::PostfixOperator::Increment,
+                    Box::new(lhs),
+                ))
+            }
+            Token::Decrement => {
+                self.next_token()?;
+                Ok(ast::Expression::Postfix(
+                    ast::PostfixOperator::Decrement,
+                    Box::new(lhs),
+                ))
+            }
+            _ => Err(ParserError::NoPostfixOperatorFound(self.cur_token.clone())),
         }
     }
 
@@ -444,6 +573,10 @@ impl Parser {
 
     fn register_prefix(&mut self, token: Discriminant<Token>, func: PrefixFunction) {
         self.prefix_functions.insert(token, func);
+    }
+
+    fn register_postfix(&mut self, token: Discriminant<Token>, func: PostfixFunction) {
+        self.postfix_functions.insert(token, func);
     }
 
     fn register_infix(&mut self, token: Discriminant<Token>, func: InfixFunction) {

@@ -9,7 +9,7 @@ pub struct FunctionDefiniton {
     pub body: Vec<Instruction>,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Var(pub String);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
