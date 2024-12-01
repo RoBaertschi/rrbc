@@ -56,12 +56,12 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         ],
         tacky::Instruction::Binary {
             op:
-                operand @ tacky::BinaryOperator::GreaterThan
-                | operand @ tacky::BinaryOperator::GreaterOrEqual
-                | operand @ tacky::BinaryOperator::LessThan
-                | operand @ tacky::BinaryOperator::LessOrEqual
-                | operand @ tacky::BinaryOperator::Equal
-                | operand @ tacky::BinaryOperator::NotEqual,
+                operand @ (tacky::BinaryOperator::GreaterThan
+                | tacky::BinaryOperator::GreaterOrEqual
+                | tacky::BinaryOperator::LessThan
+                | tacky::BinaryOperator::LessOrEqual
+                | tacky::BinaryOperator::Equal
+                | tacky::BinaryOperator::NotEqual),
             lhs,
             rhs,
             dst,

@@ -65,7 +65,7 @@ impl EmitAsm for Instruction {
             Instruction::AllocateStack(val) => format!("{}subq ${}, %rsp\n", tabs, *val),
 
             Instruction::Binary {
-                op: op @ BinaryOperator::Sal | op @ BinaryOperator::Sar,
+                op: op @ (BinaryOperator::Sal | BinaryOperator::Sar),
                 lhs,
                 rhs,
             } => format!(

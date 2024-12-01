@@ -259,6 +259,28 @@ impl Parser {
         })
     }
 
+    fn parse_expression_try_postfix(
+        &mut self,
+        mut left_exp: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        if self
+            .postfix_functions
+            .contains_key(&mem::discriminant(&self.peek_token))
+        {
+            self.next_token()?;
+            let postfix = self
+                .postfix_functions
+                .get(&mem::discriminant(&self.cur_token));
+
+            if let Some(postfix) = postfix {
+                left_exp = postfix(self, left_exp)?;
+            }
+
+            return Ok(left_exp);
+        }
+        return Ok(left_exp);
+    }
+
     fn parse_expression(&mut self, precedence: Precedence) -> Result<ast::Expression, ParserError> {
         let prefix = self
             .prefix_functions
@@ -280,27 +302,11 @@ impl Parser {
                             .get(&mem::discriminant(&self.cur_token))
                             .unwrap()(self, left_exp)?;
                     } else {
-                        let postfix = self
-                            .postfix_functions
-                            .get(&mem::discriminant(&self.cur_token));
-
-                        if let Some(postfix) = postfix {
-                            left_exp = postfix(self, left_exp)?;
-                        }
-
-                        return Ok(left_exp);
+                        return self.parse_expression_try_postfix(left_exp);
                     }
                 }
 
-                let postfix = self
-                    .postfix_functions
-                    .get(&mem::discriminant(&self.cur_token));
-
-                if let Some(postfix) = postfix {
-                    left_exp = postfix(self, left_exp)?;
-                }
-
-                Ok(left_exp)
+                self.parse_expression_try_postfix(left_exp)
             }
             None => Err(ParserError::NoPrefixFunction(self.cur_token.clone())),
         }
@@ -400,42 +406,42 @@ impl Parser {
             Token::Minus => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary(
-                    ast::UnaryOperator::Negate,
-                    Box::new(expr),
-                ))
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Negate,
+                    expression: Box::new(expr),
+                })
             }
             Token::Tilde => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary(
-                    ast::UnaryOperator::Complement,
-                    Box::new(expr),
-                ))
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Complement,
+                    expression: Box::new(expr),
+                })
             }
             Token::Not => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary(
-                    ast::UnaryOperator::Not,
-                    Box::new(expr),
-                ))
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Not,
+                    expression: Box::new(expr),
+                })
             }
             Token::Increment => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary(
-                    ast::UnaryOperator::Increment,
-                    Box::new(expr),
-                ))
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Increment,
+                    expression: Box::new(expr),
+                })
             }
             Token::Decrement => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary(
-                    ast::UnaryOperator::Decrement,
-                    Box::new(expr),
-                ))
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Decrement,
+                    expression: Box::new(expr),
+                })
             }
             _ => Err(ParserError::NoUnaryOperatorFound(self.cur_token.clone())),
         }
@@ -443,20 +449,14 @@ impl Parser {
 
     fn parse_postfix(&mut self, lhs: ast::Expression) -> Result<ast::Expression, ParserError> {
         match &self.cur_token {
-            Token::Increment => {
-                self.next_token()?;
-                Ok(ast::Expression::Postfix(
-                    ast::PostfixOperator::Increment,
-                    Box::new(lhs),
-                ))
-            }
-            Token::Decrement => {
-                self.next_token()?;
-                Ok(ast::Expression::Postfix(
-                    ast::PostfixOperator::Decrement,
-                    Box::new(lhs),
-                ))
-            }
+            Token::Increment => Ok(ast::Expression::Postfix(
+                ast::PostfixOperator::Increment,
+                Box::new(lhs),
+            )),
+            Token::Decrement => Ok(ast::Expression::Postfix(
+                ast::PostfixOperator::Decrement,
+                Box::new(lhs),
+            )),
             _ => Err(ParserError::NoPostfixOperatorFound(self.cur_token.clone())),
         }
     }
@@ -672,10 +672,10 @@ mod tests {
             vec![ast::BlockItem::S(ast::Statement::Return(
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Negate,
-                        Box::new(Expression::Constant(2))
-                    ),),
+                    lhs: Box::new(Expression::Unary {
+                        op: ast::UnaryOperator::Negate,
+                        expression: Box::new(Expression::Constant(2))
+                    },),
                     rhs: Box::new(Expression::Constant(2))
                 }
             ))]
@@ -704,14 +704,14 @@ mod tests {
             vec![ast::BlockItem::S(ast::Statement::Return(
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Negate,
-                        Box::new(Expression::Constant(2))
-                    ),),
-                    rhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Complement,
-                        Box::new(Expression::Constant(2))
-                    ))
+                    lhs: Box::new(Expression::Unary {
+                        op: ast::UnaryOperator::Negate,
+                        expression: Box::new(Expression::Constant(2))
+                    },),
+                    rhs: Box::new(Expression::Unary {
+                        op: ast::UnaryOperator::Complement,
+                        expression: Box::new(Expression::Constant(2))
+                    })
                 }
             ))]
         );
@@ -739,16 +739,16 @@ mod tests {
             vec![ast::BlockItem::S(ast::Statement::Return(
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Negate,
-                        Box::new(Expression::Constant(2))
-                    ),),
+                    lhs: Box::new(Expression::Unary {
+                        op: ast::UnaryOperator::Negate,
+                        expression: Box::new(Expression::Constant(2))
+                    },),
                     rhs: Box::new(Expression::Binary {
                         op: BinaryOperator::Multiply,
-                        lhs: Box::new(Expression::Unary(
-                            ast::UnaryOperator::Complement,
-                            Box::new(Expression::Constant(2))
-                        )),
+                        lhs: Box::new(Expression::Unary {
+                            op: ast::UnaryOperator::Complement,
+                            expression: Box::new(Expression::Constant(2))
+                        }),
                         rhs: Box::new(Expression::Constant(4))
                     })
                 }
@@ -783,10 +783,10 @@ mod tests {
                         lhs: Box::new(Expression::Constant(3)),
                         rhs: Box::new(Expression::Constant(2))
                     },),
-                    rhs: Box::new(Expression::Unary(
-                        ast::UnaryOperator::Complement,
-                        Box::new(Expression::Constant(2))
-                    ))
+                    rhs: Box::new(Expression::Unary {
+                        op: ast::UnaryOperator::Complement,
+                        expression: Box::new(Expression::Constant(2))
+                    })
                 }
             ))]
         );

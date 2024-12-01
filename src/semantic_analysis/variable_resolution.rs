@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{BlockItem, Declaration, Expression, Program, Statement},
+    ast::{BlockItem, Declaration, Expression, Program, Statement, UnaryOperator},
     unique_id,
 };
 
@@ -85,36 +85,59 @@ pub fn resolve_statement(
     })
 }
 
+pub fn resolve_variable(
+    variable_map: &mut VariableMap,
+    expr: Expression,
+) -> Result<Expression, VariableResolutionError> {
+    match expr {
+        Expression::Var(name) => Ok(Expression::Var(
+            variable_map
+                .get(&name)
+                .ok_or(VariableResolutionError::VariableNameNotFound(name))?
+                .clone(),
+        )),
+
+        expr => Err(VariableResolutionError::InvalidLvalue(expr)),
+    }
+}
+
 pub fn resolve_expression(
     variable_map: &mut VariableMap,
     expr: Expression,
 ) -> Result<Expression, VariableResolutionError> {
     Ok(match expr {
-        Expression::Assignment { lhs, rhs, op } => match *lhs {
-            Expression::Var(name) => Expression::Assignment {
-                op,
-                lhs: Box::new(Expression::Var(
-                    variable_map
-                        .get(&name)
-                        .ok_or(VariableResolutionError::VariableNameNotFound(name))?
-                        .clone(),
-                )),
-                rhs: Box::new(resolve_expression(variable_map, *rhs)?),
-            },
-            expr => return Err(VariableResolutionError::InvalidLvalue(expr)),
-        },
         Expression::Var(name) => match variable_map.get(&name) {
             Some(unique_name) => Expression::Var(unique_name.clone()),
             None => return Err(VariableResolutionError::VariableNameNotFound(name)),
         },
-        Expression::Unary(op, expr) => {
-            Expression::Unary(op, Box::new(resolve_expression(variable_map, *expr)?))
-        }
+        Expression::Assignment { lhs, rhs, op } => Expression::Assignment {
+            op,
+            lhs: Box::new(resolve_variable(variable_map, *lhs)?),
+            rhs: Box::new(resolve_expression(variable_map, *rhs)?),
+        },
+        Expression::Unary {
+            op: op @ (UnaryOperator::Decrement | UnaryOperator::Increment),
+            expression: expr,
+        } => Expression::Unary {
+            op,
+            expression: Box::new(resolve_variable(variable_map, *expr)?),
+        },
+        Expression::Postfix(postfix_operator, expression) => Expression::Postfix(
+            postfix_operator,
+            Box::new(resolve_variable(variable_map, *expression)?),
+        ),
+        Expression::Unary {
+            op,
+            expression: expr,
+        } => Expression::Unary {
+            op,
+            expression: Box::new(resolve_expression(variable_map, *expr)?),
+        },
         Expression::Binary { op, lhs, rhs } => Expression::Binary {
             op,
             lhs: Box::new(resolve_expression(variable_map, *lhs)?),
             rhs: Box::new(resolve_expression(variable_map, *rhs)?),
         },
-        other => other,
+        Expression::Constant(constant) => Expression::Constant(constant),
     })
 }

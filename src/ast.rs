@@ -7,7 +7,10 @@ type Identifier = String;
 pub enum Expression {
     Var(Identifier),
     Constant(i32),
-    Unary(UnaryOperator, Box<Expression>),
+    Unary {
+        op: UnaryOperator,
+        expression: Box<Expression>,
+    },
     Binary {
         op: BinaryOperator,
         lhs: Box<Expression>,
