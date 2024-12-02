@@ -1,7 +1,12 @@
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum LexerError {
+    #[error("The character '{0}' could not be represented")]
     UnknownCharacter(char),
+    #[error("Could not convert the number \"{0}\" to a number.")]
     InvalidNumber(String),
+    #[error("Identifiers can not start with numbers.")]
     IdentifierStartedWithNumber,
 }
 

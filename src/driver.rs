@@ -1,6 +1,5 @@
 use std::{
     env::{self, Args},
-    error::Error,
     fmt::Display,
     fs,
     io::{self},
@@ -8,6 +7,8 @@ use std::{
     process::{self, ChildStderr, ChildStdout, Command},
     str::FromStr,
 };
+
+use thiserror::Error;
 
 use crate::{
     ast,
@@ -24,48 +25,22 @@ use crate::{assembly, codegen, emit::EmitAsm};
 #[cfg(feature = "tacky")]
 use crate::{tackler, tacky};
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum DriverExecutionError {
-    IoError(io::Error),
+    IoError(#[from] io::Error),
     PreprocessorFailed(Option<ChildStderr>, Option<ChildStdout>),
     /// The preprocessor did not create a file.
     PreprocessorNoFile,
     AssemblerFailed(Option<ChildStderr>, Option<ChildStdout>),
     AssemblerNoFile,
-    Lexer(LexerError),
-    Parser(ParserError),
-    VariableResolutionError(VariableResolutionError),
+    Lexer(#[from] LexerError),
+    Parser(#[from] ParserError),
+    VariableResolutionError(#[from] VariableResolutionError),
 }
 
 impl Display for DriverExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Error: {:?}", self)
-    }
-}
-
-impl Error for DriverExecutionError {}
-
-impl From<io::Error> for DriverExecutionError {
-    fn from(value: io::Error) -> Self {
-        Self::IoError(value)
-    }
-}
-
-impl From<lexer::LexerError> for DriverExecutionError {
-    fn from(value: lexer::LexerError) -> Self {
-        Self::Lexer(value)
-    }
-}
-
-impl From<ParserError> for DriverExecutionError {
-    fn from(value: ParserError) -> Self {
-        Self::Parser(value)
-    }
-}
-
-impl From<VariableResolutionError> for DriverExecutionError {
-    fn from(value: VariableResolutionError) -> Self {
-        Self::VariableResolutionError(value)
     }
 }
 
