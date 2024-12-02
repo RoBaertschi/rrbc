@@ -21,6 +21,10 @@ pub enum Token {
     CloseBrace,
     Semicolon,
 
+    // Ternary
+    QuestionMark, // ?
+    Colon,        // :
+
     // Operator
     Minus,          // -
     Plus,           // +
@@ -63,6 +67,8 @@ pub enum Token {
     KWInt,
     KWReturn,
     KWVoid,
+    KWIf,
+    KWElse,
 }
 
 impl Token {
@@ -71,6 +77,8 @@ impl Token {
             "int" => Self::KWInt,
             "return" => Self::KWReturn,
             "void" => Self::KWVoid,
+            "if" => Self::KWIf,
+            "else" => Self::KWElse,
             _ => Self::Identifier(string.to_owned()),
         }
     }
@@ -173,6 +181,8 @@ impl Lexer {
             b')' => Token::CloseParen,
             b'{' => Token::OpenBrace,
             b'}' => Token::CloseBrace,
+            b':' => Token::Colon,
+            b'?' => Token::QuestionMark,
             b';' => Token::Semicolon,
             b'~' => Token::Tilde,
             b'+' => match self.peek_char() {

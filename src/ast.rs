@@ -21,6 +21,11 @@ pub enum Expression {
         lhs: Box<Expression>,
         rhs: Box<Expression>,
     },
+    Conditional {
+        condition: Box<Expression>,
+        then: Box<Expression>,
+        r#else: Box<Expression>,
+    },
     Postfix(PostfixOperator, Box<Expression>),
 }
 
@@ -141,6 +146,11 @@ impl UnaryOperator {
 pub enum Statement {
     Return(Expression),
     Expression(Expression),
+    If {
+        condition: Expression,
+        then: Box<Statement>,
+        r#else: Option<Box<Statement>>,
+    },
     Null,
 }
 

@@ -1,6 +1,5 @@
 use std::{
     env::{self, Args},
-    fmt::Display,
     fs,
     io::{self},
     path::PathBuf,
@@ -42,6 +41,7 @@ pub enum DriverExecutionError {
     Lexer(#[from] LexerError),
     #[error("{0}")]
     Parser(#[from] ParserError),
+    #[cfg(feature = "validate")]
     #[error("{0}")]
     VariableResolutionError(#[from] VariableResolutionError),
 }

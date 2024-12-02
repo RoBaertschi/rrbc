@@ -14,6 +14,7 @@ use crate::{
 enum Precedence {
     Lowest = 0,
     Assignment,
+    Conditional,
     Or,
     And,
     BitwiseOr,
@@ -56,6 +57,7 @@ impl Precedence {
             | Token::BitwiseXorAssign
             | Token::BitwiseShiftLeftAssign
             | Token::BitwiseShiftRightAssign => Self::Assignment,
+            Token::QuestionMark => Self::Conditional,
             _ => return None,
         })
     }
@@ -239,6 +241,10 @@ impl Parser {
             mem::discriminant(&Token::BitwiseShiftRightAssign),
             Self::parse_assignment_expression,
         );
+        parser.register_infix(
+            mem::discriminant(&Token::QuestionMark),
+            Self::parse_conditional,
+        );
 
         parser.register_postfix(mem::discriminant(&Token::Increment), Self::parse_postfix);
         parser.register_postfix(mem::discriminant(&Token::Decrement), Self::parse_postfix);
@@ -263,7 +269,7 @@ impl Parser {
         &mut self,
         mut left_exp: ast::Expression,
     ) -> Result<ast::Expression, ParserError> {
-        if self
+        while self
             .postfix_functions
             .contains_key(&mem::discriminant(&self.peek_token))
         {
@@ -275,8 +281,6 @@ impl Parser {
             if let Some(postfix) = postfix {
                 left_exp = postfix(self, left_exp)?;
             }
-
-            return Ok(left_exp);
         }
         return Ok(left_exp);
     }
@@ -379,6 +383,19 @@ impl Parser {
         })
     }
 
+    fn parse_conditional(&mut self, left: ast::Expression) -> Result<ast::Expression, ParserError> {
+        self.next_token()?;
+        let then = Box::new(self.parse_expression(Precedence::Lowest)?);
+        self.expect_peek(Token::Colon)?;
+        self.next_token()?;
+        let r#else = Box::new(self.parse_expression(Precedence::Assignment)?);
+        Ok(Expression::Conditional {
+            condition: Box::new(left),
+            then,
+            r#else,
+        })
+    }
+
     fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
         if let Token::Constant(val) = &self.cur_token {
             return Ok(ast::Expression::Constant(*val));
@@ -474,6 +491,7 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match self.cur_token {
             Token::KWReturn => self.parse_return_statement(),
+            Token::KWIf => self.parse_if_statement(),
             Token::Semicolon => Ok(ast::Statement::Null),
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
@@ -491,6 +509,30 @@ impl Parser {
         self.expect_peek(Token::Semicolon)?;
 
         Ok(ast::Statement::Return(expr))
+    }
+
+    fn parse_if_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(Token::OpenParen)?;
+        self.next_token()?;
+        let condition = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(Token::CloseParen)?;
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+
+        let else_stmt = match self.peek_token {
+            Token::KWElse => {
+                self.next_token()?;
+                self.next_token()?;
+                Some(Box::new(self.parse_statement()?))
+            }
+            _ => None,
+        };
+
+        Ok(ast::Statement::If {
+            condition,
+            then: Box::new(stmt),
+            r#else: else_stmt,
+        })
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {

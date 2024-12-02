@@ -13,3 +13,5 @@ validate = []
 tacky = ["validate"]
 codegen = ["tacky"]
 emit = ["codegen"]
+
+[dev-dependencies]

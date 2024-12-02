@@ -82,6 +82,21 @@ pub fn resolve_statement(
             Statement::Expression(resolve_expression(variable_map, expr)?)
         }
         Statement::Null => Statement::Null,
+        Statement::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            let resolved_else = match r#else {
+                Some(r#else) => Some(Box::new(resolve_statement(variable_map, *r#else)?)),
+                None => None,
+            };
+            Statement::If {
+                condition: resolve_expression(variable_map, condition)?,
+                then: Box::new(resolve_statement(variable_map, *then)?),
+                r#else: resolved_else,
+            }
+        }
     })
 }
 
@@ -139,5 +154,14 @@ pub fn resolve_expression(
             rhs: Box::new(resolve_expression(variable_map, *rhs)?),
         },
         Expression::Constant(constant) => Expression::Constant(constant),
+        Expression::Conditional {
+            condition,
+            then,
+            r#else,
+        } => Expression::Conditional {
+            condition: Box::new(resolve_expression(variable_map, *condition)?),
+            then: Box::new(resolve_expression(variable_map, *then)?),
+            r#else: Box::new(resolve_expression(variable_map, *r#else)?),
+        },
     })
 }

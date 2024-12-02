@@ -8,6 +8,7 @@ pub mod driver;
 pub mod emit;
 pub mod lexer;
 pub mod parser;
+#[cfg(feature = "validate")]
 pub mod semantic_analysis;
 #[cfg(feature = "tacky")]
 pub mod tackler;
