@@ -66,21 +66,21 @@ pub enum ParserError {
     /// 1. Is the expected token
     /// 2. is the received token
     /// Also, don't forget to not print the values, only the type should be printed.
-    #[error("Unexpected Token {expected:?}, expected {actual:?}")]
+    #[error("Unexpected Token, expected: \"{expected:?}\", actual: \"{actual:?}\"")]
     UnexpectedToken { expected: Token, actual: Token },
     #[error("{0:?}")]
     LexerError(#[from] LexerError),
     #[error("Could not parse a declaration, offending token: {0:?}. parse_declaration got called on a invalid token for a declaration.")]
     CouldNotParseDeclaration(Token),
-    #[error("Expected an '=' or ';' after a variable declaration. Got {0:?}")]
+    #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
     DeclarationExpectedAssignOrSemicolon(Token),
-    #[error("Could not find a prefix function for {0:?}.")]
+    #[error("Could not find a prefix function for \"{0:?}\".")]
     NoPrefixFunction(Token),
-    #[error("Could not find a postfix function for {0:?}.")]
+    #[error("Could not find a postfix function for \"{0:?}\".")]
     NoPostfixOperatorFound(Token),
-    #[error("Could not find unary operator for {0:?}. This indicates a missuse of parse_unary or a missing branch in parse_unary.")]
+    #[error("Could not find unary operator for \"{0:?}\". This indicates a missuse of parse_unary or a missing branch in parse_unary.")]
     NoUnaryOperatorFound(Token),
-    #[error("Could not find binary operator for {0:?}. This indicates a missuse of parse_binary or a missing branch in parse_binary.")]
+    #[error("Could not find binary operator for \"{0:?}\". This indicates a missuse of parse_binary or a missing branch in parse_binary.")]
     NoBinaryOperatorFound(Token),
 }
 

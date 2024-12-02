@@ -27,21 +27,23 @@ use crate::{tackler, tacky};
 
 #[derive(Error, Debug)]
 pub enum DriverExecutionError {
+    #[error("{0}")]
     IoError(#[from] io::Error),
+    #[error("Preprocessor Failed:\nStderr: {0:?}\nStdout: {1:?}")]
     PreprocessorFailed(Option<ChildStderr>, Option<ChildStdout>),
     /// The preprocessor did not create a file.
+    #[error("Could not find the file created by the preprocessor.")]
     PreprocessorNoFile,
+    #[error("Assembler Failed:\nStderr: {0:?}\nStdout: {1:?}")]
     AssemblerFailed(Option<ChildStderr>, Option<ChildStdout>),
+    #[error("Could not find the file created by the assembler.")]
     AssemblerNoFile,
+    #[error("{0}")]
     Lexer(#[from] LexerError),
+    #[error("{0}")]
     Parser(#[from] ParserError),
+    #[error("{0}")]
     VariableResolutionError(#[from] VariableResolutionError),
-}
-
-impl Display for DriverExecutionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error: {:?}", self)
-    }
 }
 
 #[derive(Default)]
