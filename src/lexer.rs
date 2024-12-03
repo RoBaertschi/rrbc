@@ -69,6 +69,7 @@ pub enum Token {
     KWVoid,
     KWIf,
     KWElse,
+    KWGoto,
 }
 
 impl Token {
@@ -79,6 +80,7 @@ impl Token {
             "void" => Self::KWVoid,
             "if" => Self::KWIf,
             "else" => Self::KWElse,
+            "goto" => Self::KWGoto,
             _ => Self::Identifier(string.to_owned()),
         }
     }

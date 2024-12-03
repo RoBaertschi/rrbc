@@ -489,10 +489,14 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        match self.cur_token {
+        match &self.cur_token {
             Token::KWReturn => self.parse_return_statement(),
             Token::KWIf => self.parse_if_statement(),
+            Token::KWGoto => self.parse_goto_statement(),
             Token::Semicolon => Ok(ast::Statement::Null),
+            Token::Identifier(ident) if self.peek_token_is(&Token::Colon) => {
+                self.parse_label_statement(ident.clone())
+            }
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
                 self.expect_peek(Token::Semicolon)?;
@@ -509,6 +513,27 @@ impl Parser {
         self.expect_peek(Token::Semicolon)?;
 
         Ok(ast::Statement::Return(expr))
+    }
+
+    fn parse_goto_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        if let Token::Identifier(label_name) = self.peek_token.clone() {
+            self.next_token()?;
+            self.expect_peek(Token::Semicolon)?;
+            Ok(ast::Statement::Goto(label_name.clone()))
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected: Token::Identifier(String::new()),
+                actual: self.peek_token.clone(),
+            })
+        }
+    }
+    fn parse_label_statement(&mut self, identifier: String) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(Token::Colon)?;
+        self.next_token()?;
+        Ok(ast::Statement::Label(
+            identifier,
+            Box::new(self.parse_statement()?),
+        ))
     }
 
     fn parse_if_statement(&mut self) -> Result<ast::Statement, ParserError> {

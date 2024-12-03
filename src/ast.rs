@@ -152,6 +152,8 @@ pub enum Statement {
         r#else: Option<Box<Statement>>,
     },
     Null,
+    Goto(Identifier),
+    Label(Identifier, Box<Statement>),
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]

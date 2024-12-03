@@ -97,6 +97,10 @@ pub fn resolve_statement(
                 r#else: resolved_else,
             }
         }
+        Statement::Goto(ident) => Statement::Goto(ident),
+        Statement::Label(ident, stmt) => {
+            Statement::Label(ident, Box::new(resolve_statement(variable_map, *stmt)?))
+        }
     })
 }
 

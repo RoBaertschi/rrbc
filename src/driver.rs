@@ -16,7 +16,10 @@ use crate::{
 };
 
 #[cfg(feature = "validate")]
-use crate::semantic_analysis::variable_resolution::{self, VariableResolutionError};
+use crate::semantic_analysis::{
+    label_resolution::LabelResolutionError,
+    variable_resolution::{self, VariableResolutionError},
+};
 
 #[cfg(feature = "codegen")]
 use crate::{assembly, codegen, emit::EmitAsm};
@@ -44,6 +47,9 @@ pub enum DriverExecutionError {
     #[cfg(feature = "validate")]
     #[error("{0}")]
     VariableResolutionError(#[from] VariableResolutionError),
+    #[cfg(feature = "validate")]
+    #[error("{0}")]
+    LabelResolutionError(#[from] LabelResolutionError),
 }
 
 #[derive(Default)]
@@ -239,6 +245,9 @@ impl Options {
         &mut self,
         program: ast::Program,
     ) -> Result<ast::Program, DriverExecutionError> {
+        use crate::semantic_analysis::label_resolution;
+
+        let program = label_resolution::resolve_program(program)?;
         Ok(variable_resolution::resolve_program(program)?)
     }
 

@@ -1,6 +1,12 @@
 int main(void) {
-    int a = 2;
+    int a = 0;
     int b = 1;
-    a > b ? a = 1 : a = 0;
-    return a;
+    a = 2;
+    b = 3;
+    a = 4;
+
+    if (a)
+        return b;
+    else
+        return a;
 }

@@ -165,6 +165,42 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
                 _ => unreachable!("Ran into an assignment with invalid lhs lvalue"),
             }
         }
+        ast::Expression::Conditional {
+            condition,
+            then,
+            r#else,
+        } => {
+            let (mut instructions, value) = emit_tacky_expression(*condition);
+            let dst_name = unique_id::temp_variable_name();
+            let dst = Value::Var(Var(dst_name.clone()));
+
+            let else_label = unique_id::temp_lable_name("conditional_else");
+            let end_label = unique_id::temp_lable_name("conditional_end");
+
+            instructions.append(&mut vec![Instruction::JumpIfZero(
+                value,
+                else_label.clone(),
+            )]);
+
+            // then
+            let (mut then_instructions, then_value) = emit_tacky_expression(*then);
+            instructions.append(&mut then_instructions);
+            instructions.append(&mut vec![
+                Instruction::Copy(then_value, Value::Var(Var(dst_name.clone()))),
+                Instruction::Jump(end_label.clone()),
+                Instruction::Label(else_label),
+            ]);
+
+            // else
+            let (mut else_instructions, else_value) = emit_tacky_expression(*r#else);
+            instructions.append(&mut else_instructions);
+            instructions.append(&mut vec![
+                Instruction::Copy(else_value, Value::Var(Var(dst_name.clone()))),
+                Instruction::Label(end_label),
+            ]);
+
+            (instructions, dst)
+        }
     }
 }
 
@@ -177,6 +213,39 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
         }
         ast::Statement::Expression(expression) => emit_tacky_expression(expression).0,
         ast::Statement::Null => vec![],
+        ast::Statement::If {
+            condition,
+            then,
+            r#else,
+        } => {
+            let (mut instructions, value) = emit_tacky_expression(condition);
+            let if_end_label = unique_id::temp_lable_name("if_end");
+            instructions.append(&mut vec![Instruction::JumpIfZero(
+                value,
+                if_end_label.clone(),
+            )]);
+            instructions.append(&mut emit_tacky_statement(*then));
+
+            if let Some(stmt) = r#else {
+                let else_end_label = unique_id::temp_lable_name("else_end");
+                instructions.append(&mut vec![
+                    Instruction::Jump(else_end_label.clone()),
+                    Instruction::Label(if_end_label),
+                ]);
+                instructions.append(&mut emit_tacky_statement(*stmt));
+                instructions.append(&mut vec![Instruction::Label(else_end_label)]);
+            } else {
+                instructions.append(&mut vec![Instruction::Label(if_end_label)]);
+            }
+
+            instructions
+        }
+        ast::Statement::Goto(name) => vec![Instruction::Jump(name)],
+        ast::Statement::Label(name, stmt) => {
+            let mut instructions = vec![Instruction::Label(name)];
+            instructions.append(&mut emit_tacky_statement(*stmt));
+            instructions
+        }
     }
 }
 
