@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     ast::{self, BinaryOperator, BlockItem, Expression},
-    lexer::{Lexer, LexerError, Token},
+    lexer::{Lexer, LexerError, TokenKind},
 };
 
 #[derive(PartialEq, PartialOrd)]
@@ -29,35 +29,36 @@ enum Precedence {
 }
 
 impl Precedence {
-    pub fn from_token(token: &Token) -> Option<Self> {
+    pub fn from_token(token: &TokenKind) -> Option<Self> {
         Some(match token {
-            Token::Plus => Self::Sum,
-            Token::Minus => Self::Sum,
-            Token::Asterisk => Self::Product,
-            Token::Slash => Self::Product,
-            Token::Percent => Self::Product,
-            Token::BitwiseAnd => Self::BitwiseAnd,
-            Token::BitwiseOr => Self::BitwiseOr,
-            Token::Xor => Self::Xor,
-            Token::ShiftLeft | Token::ShiftRight => Self::Shift,
-            Token::Or => Self::Or,
-            Token::And => Self::And,
-            Token::Equal | Token::NotEqual => Self::Equal,
-            Token::LessThan | Token::LessOrEqual | Token::GreaterThan | Token::GreaterOrEqual => {
-                Self::Ordered
-            }
-            Token::Assign
-            | Token::PlusAssign
-            | Token::MinusAssign
-            | Token::AsteriskAssign
-            | Token::SlashAssign
-            | Token::PercentAssign
-            | Token::BitwiseAndAssign
-            | Token::BitwiseOrAssign
-            | Token::BitwiseXorAssign
-            | Token::BitwiseShiftLeftAssign
-            | Token::BitwiseShiftRightAssign => Self::Assignment,
-            Token::QuestionMark => Self::Conditional,
+            TokenKind::Plus => Self::Sum,
+            TokenKind::Minus => Self::Sum,
+            TokenKind::Asterisk => Self::Product,
+            TokenKind::Slash => Self::Product,
+            TokenKind::Percent => Self::Product,
+            TokenKind::BitwiseAnd => Self::BitwiseAnd,
+            TokenKind::BitwiseOr => Self::BitwiseOr,
+            TokenKind::Xor => Self::Xor,
+            TokenKind::ShiftLeft | TokenKind::ShiftRight => Self::Shift,
+            TokenKind::Or => Self::Or,
+            TokenKind::And => Self::And,
+            TokenKind::Equal | TokenKind::NotEqual => Self::Equal,
+            TokenKind::LessThan
+            | TokenKind::LessOrEqual
+            | TokenKind::GreaterThan
+            | TokenKind::GreaterOrEqual => Self::Ordered,
+            TokenKind::Assign
+            | TokenKind::PlusAssign
+            | TokenKind::MinusAssign
+            | TokenKind::AsteriskAssign
+            | TokenKind::SlashAssign
+            | TokenKind::PercentAssign
+            | TokenKind::BitwiseAndAssign
+            | TokenKind::BitwiseOrAssign
+            | TokenKind::BitwiseXorAssign
+            | TokenKind::BitwiseShiftLeftAssign
+            | TokenKind::BitwiseShiftRightAssign => Self::Assignment,
+            TokenKind::QuestionMark => Self::Conditional,
             _ => return None,
         })
     }
@@ -69,21 +70,24 @@ pub enum ParserError {
     /// 2. is the received token
     /// Also, don't forget to not print the values, only the type should be printed.
     #[error("Unexpected Token, expected: \"{expected:?}\", actual: \"{actual:?}\"")]
-    UnexpectedToken { expected: Token, actual: Token },
+    UnexpectedToken {
+        expected: TokenKind,
+        actual: TokenKind,
+    },
     #[error("{0:?}")]
     LexerError(#[from] LexerError),
     #[error("Could not parse a declaration, offending token: {0:?}. parse_declaration got called on a invalid token for a declaration.")]
-    CouldNotParseDeclaration(Token),
+    CouldNotParseDeclaration(TokenKind),
     #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
-    DeclarationExpectedAssignOrSemicolon(Token),
+    DeclarationExpectedAssignOrSemicolon(TokenKind),
     #[error("Could not find a prefix function for \"{0:?}\".")]
-    NoPrefixFunction(Token),
+    NoPrefixFunction(TokenKind),
     #[error("Could not find a postfix function for \"{0:?}\".")]
-    NoPostfixOperatorFound(Token),
+    NoPostfixOperatorFound(TokenKind),
     #[error("Could not find unary operator for \"{0:?}\". This indicates a missuse of parse_unary or a missing branch in parse_unary.")]
-    NoUnaryOperatorFound(Token),
+    NoUnaryOperatorFound(TokenKind),
     #[error("Could not find binary operator for \"{0:?}\". This indicates a missuse of parse_binary or a missing branch in parse_binary.")]
-    NoBinaryOperatorFound(Token),
+    NoBinaryOperatorFound(TokenKind),
 }
 
 type PrefixFunction = fn(&mut Parser) -> Result<ast::Expression, ParserError>;
@@ -93,161 +97,173 @@ type InfixFunction = fn(&mut Parser, ast::Expression) -> Result<ast::Expression,
 #[derive(Debug)]
 pub struct Parser {
     lexer: Lexer,
-    cur_token: Token,
-    peek_token: Token,
-    prefix_functions: HashMap<Discriminant<Token>, PrefixFunction>,
-    postfix_functions: HashMap<Discriminant<Token>, PostfixFunction>,
-    infix_functions: HashMap<Discriminant<Token>, InfixFunction>,
+    cur_token: TokenKind,
+    peek_token: TokenKind,
+    prefix_functions: HashMap<Discriminant<TokenKind>, PrefixFunction>,
+    postfix_functions: HashMap<Discriminant<TokenKind>, PostfixFunction>,
+    infix_functions: HashMap<Discriminant<TokenKind>, InfixFunction>,
 }
 
 impl Parser {
     pub fn try_build(lexer: Lexer) -> Result<Self, LexerError> {
         let mut parser = Self {
             lexer,
-            cur_token: Token::Eof,
-            peek_token: Token::Eof,
+            cur_token: TokenKind::Eof,
+            peek_token: TokenKind::Eof,
             prefix_functions: HashMap::new(),
             postfix_functions: HashMap::new(),
             infix_functions: HashMap::new(),
         };
 
         // Prefix
-        parser.register_prefix(mem::discriminant(&Token::Constant(1)), Self::parse_constant);
-        parser.register_prefix(mem::discriminant(&Token::Minus), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Tilde), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Not), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Increment), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Decrement), Self::parse_unary);
         parser.register_prefix(
-            mem::discriminant(&Token::OpenParen),
+            mem::discriminant(&TokenKind::Constant(1)),
+            Self::parse_constant,
+        );
+        parser.register_prefix(mem::discriminant(&TokenKind::Minus), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&TokenKind::Tilde), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&TokenKind::Not), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&TokenKind::Increment), Self::parse_unary);
+        parser.register_prefix(mem::discriminant(&TokenKind::Decrement), Self::parse_unary);
+        parser.register_prefix(
+            mem::discriminant(&TokenKind::OpenParen),
             Self::parse_grouped_expression,
         );
         parser.register_prefix(
-            mem::discriminant(&Token::Identifier(String::new())),
+            mem::discriminant(&TokenKind::Identifier(String::new())),
             Self::parse_identifier,
         );
 
         // Infix
         parser.register_infix(
-            mem::discriminant(&Token::Plus),
+            mem::discriminant(&TokenKind::Plus),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Minus),
+            mem::discriminant(&TokenKind::Minus),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Asterisk),
+            mem::discriminant(&TokenKind::Asterisk),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Slash),
+            mem::discriminant(&TokenKind::Slash),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Percent),
+            mem::discriminant(&TokenKind::Percent),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::ShiftLeft),
+            mem::discriminant(&TokenKind::ShiftLeft),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::ShiftRight),
+            mem::discriminant(&TokenKind::ShiftRight),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseAnd),
+            mem::discriminant(&TokenKind::BitwiseAnd),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Xor),
+            mem::discriminant(&TokenKind::Xor),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseOr),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(mem::discriminant(&Token::Or), Self::parse_binary_expression);
-        parser.register_infix(
-            mem::discriminant(&Token::And),
+            mem::discriminant(&TokenKind::BitwiseOr),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::LessThan),
+            mem::discriminant(&TokenKind::Or),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::LessOrEqual),
+            mem::discriminant(&TokenKind::And),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::GreaterThan),
+            mem::discriminant(&TokenKind::LessThan),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::GreaterOrEqual),
+            mem::discriminant(&TokenKind::LessOrEqual),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Equal),
+            mem::discriminant(&TokenKind::GreaterThan),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::NotEqual),
+            mem::discriminant(&TokenKind::GreaterOrEqual),
             Self::parse_binary_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::Assign),
+            mem::discriminant(&TokenKind::Equal),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&TokenKind::NotEqual),
+            Self::parse_binary_expression,
+        );
+        parser.register_infix(
+            mem::discriminant(&TokenKind::Assign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::PlusAssign),
+            mem::discriminant(&TokenKind::PlusAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::MinusAssign),
+            mem::discriminant(&TokenKind::MinusAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::AsteriskAssign),
+            mem::discriminant(&TokenKind::AsteriskAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::SlashAssign),
+            mem::discriminant(&TokenKind::SlashAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::PercentAssign),
+            mem::discriminant(&TokenKind::PercentAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseAndAssign),
+            mem::discriminant(&TokenKind::BitwiseAndAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseOrAssign),
+            mem::discriminant(&TokenKind::BitwiseOrAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseXorAssign),
+            mem::discriminant(&TokenKind::BitwiseXorAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseShiftLeftAssign),
+            mem::discriminant(&TokenKind::BitwiseShiftLeftAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::BitwiseShiftRightAssign),
+            mem::discriminant(&TokenKind::BitwiseShiftRightAssign),
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::QuestionMark),
+            mem::discriminant(&TokenKind::QuestionMark),
             Self::parse_conditional,
         );
 
-        parser.register_postfix(mem::discriminant(&Token::Increment), Self::parse_postfix);
-        parser.register_postfix(mem::discriminant(&Token::Decrement), Self::parse_postfix);
+        parser.register_postfix(
+            mem::discriminant(&TokenKind::Increment),
+            Self::parse_postfix,
+        );
+        parser.register_postfix(
+            mem::discriminant(&TokenKind::Decrement),
+            Self::parse_postfix,
+        );
 
         parser.next_token()?;
         parser.next_token()?;
@@ -258,7 +274,7 @@ impl Parser {
     pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
         let func = self.parse_function_definition()?;
 
-        self.expect_peek(Token::Eof)?;
+        self.expect_peek(TokenKind::Eof)?;
 
         Ok(ast::Program {
             function_definition: func,
@@ -294,7 +310,8 @@ impl Parser {
             Some(prefix) => {
                 let mut left_exp = prefix(self)?;
 
-                while !self.peek_token_is(&Token::Semicolon) && precedence < self.peek_precedence()
+                while !self.peek_token_is(&TokenKind::Semicolon)
+                    && precedence < self.peek_precedence()
                 {
                     if self
                         .infix_functions
@@ -321,24 +338,24 @@ impl Parser {
         left: ast::Expression,
     ) -> Result<ast::Expression, ParserError> {
         let bin = match &self.cur_token {
-            Token::Plus => BinaryOperator::Add,
-            Token::Minus => BinaryOperator::Subtract,
-            Token::Asterisk => BinaryOperator::Multiply,
-            Token::Slash => BinaryOperator::Divide,
-            Token::Percent => BinaryOperator::Reminder,
-            Token::ShiftLeft => BinaryOperator::ShiftLeft,
-            Token::ShiftRight => BinaryOperator::ShiftRight,
-            Token::BitwiseAnd => BinaryOperator::BitwiseAnd,
-            Token::Xor => BinaryOperator::Xor,
-            Token::BitwiseOr => BinaryOperator::BitwiseOr,
-            Token::Equal => BinaryOperator::Equal,
-            Token::NotEqual => BinaryOperator::NotEqual,
-            Token::And => BinaryOperator::And,
-            Token::Or => BinaryOperator::Or,
-            Token::LessThan => BinaryOperator::LessThan,
-            Token::LessOrEqual => BinaryOperator::LessOrEqual,
-            Token::GreaterThan => BinaryOperator::GreaterThan,
-            Token::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
+            TokenKind::Plus => BinaryOperator::Add,
+            TokenKind::Minus => BinaryOperator::Subtract,
+            TokenKind::Asterisk => BinaryOperator::Multiply,
+            TokenKind::Slash => BinaryOperator::Divide,
+            TokenKind::Percent => BinaryOperator::Reminder,
+            TokenKind::ShiftLeft => BinaryOperator::ShiftLeft,
+            TokenKind::ShiftRight => BinaryOperator::ShiftRight,
+            TokenKind::BitwiseAnd => BinaryOperator::BitwiseAnd,
+            TokenKind::Xor => BinaryOperator::Xor,
+            TokenKind::BitwiseOr => BinaryOperator::BitwiseOr,
+            TokenKind::Equal => BinaryOperator::Equal,
+            TokenKind::NotEqual => BinaryOperator::NotEqual,
+            TokenKind::And => BinaryOperator::And,
+            TokenKind::Or => BinaryOperator::Or,
+            TokenKind::LessThan => BinaryOperator::LessThan,
+            TokenKind::LessOrEqual => BinaryOperator::LessOrEqual,
+            TokenKind::GreaterThan => BinaryOperator::GreaterThan,
+            TokenKind::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
             tok => return Err(ParserError::NoBinaryOperatorFound(tok.clone())),
         };
 
@@ -358,17 +375,17 @@ impl Parser {
         left: ast::Expression,
     ) -> Result<ast::Expression, ParserError> {
         let op: ast::AssignmentOperator = match self.cur_token {
-            Token::Assign => ast::AssignmentOperator::None,
-            Token::PlusAssign => ast::AssignmentOperator::Add,
-            Token::MinusAssign => ast::AssignmentOperator::Subtract,
-            Token::AsteriskAssign => ast::AssignmentOperator::Multiply,
-            Token::SlashAssign => ast::AssignmentOperator::Divide,
-            Token::PercentAssign => ast::AssignmentOperator::Reminder,
-            Token::BitwiseAndAssign => ast::AssignmentOperator::BitwiseAnd,
-            Token::BitwiseOrAssign => ast::AssignmentOperator::BitwiseOr,
-            Token::BitwiseXorAssign => ast::AssignmentOperator::BitwiseXor,
-            Token::BitwiseShiftLeftAssign => ast::AssignmentOperator::ShiftLeft,
-            Token::BitwiseShiftRightAssign => ast::AssignmentOperator::ShiftRight,
+            TokenKind::Assign => ast::AssignmentOperator::None,
+            TokenKind::PlusAssign => ast::AssignmentOperator::Add,
+            TokenKind::MinusAssign => ast::AssignmentOperator::Subtract,
+            TokenKind::AsteriskAssign => ast::AssignmentOperator::Multiply,
+            TokenKind::SlashAssign => ast::AssignmentOperator::Divide,
+            TokenKind::PercentAssign => ast::AssignmentOperator::Reminder,
+            TokenKind::BitwiseAndAssign => ast::AssignmentOperator::BitwiseAnd,
+            TokenKind::BitwiseOrAssign => ast::AssignmentOperator::BitwiseOr,
+            TokenKind::BitwiseXorAssign => ast::AssignmentOperator::BitwiseXor,
+            TokenKind::BitwiseShiftLeftAssign => ast::AssignmentOperator::ShiftLeft,
+            TokenKind::BitwiseShiftRightAssign => ast::AssignmentOperator::ShiftRight,
             _ => unreachable!(
                 "Wrong token passed to parse_assignment_expression, should not happen."
             ),
@@ -386,7 +403,7 @@ impl Parser {
     fn parse_conditional(&mut self, left: ast::Expression) -> Result<ast::Expression, ParserError> {
         self.next_token()?;
         let then = Box::new(self.parse_expression(Precedence::Lowest)?);
-        self.expect_peek(Token::Colon)?;
+        self.expect_peek(TokenKind::Colon)?;
         self.next_token()?;
         let r#else = Box::new(self.parse_expression(Precedence::Assignment)?);
         Ok(Expression::Conditional {
@@ -397,30 +414,30 @@ impl Parser {
     }
 
     fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
-        if let Token::Constant(val) = &self.cur_token {
+        if let TokenKind::Constant(val) = &self.cur_token {
             return Ok(ast::Expression::Constant(*val));
         }
 
         Err(ParserError::UnexpectedToken {
-            expected: Token::Constant(0),
+            expected: TokenKind::Constant(0),
             actual: self.cur_token.clone(),
         })
     }
 
     fn parse_identifier(&mut self) -> Result<ast::Expression, ParserError> {
-        if let Token::Identifier(val) = self.cur_token.clone() {
+        if let TokenKind::Identifier(val) = self.cur_token.clone() {
             return Ok(ast::Expression::Var(val));
         }
 
         Err(ParserError::UnexpectedToken {
-            expected: Token::Identifier(String::new()),
+            expected: TokenKind::Identifier(String::new()),
             actual: self.cur_token.clone(),
         })
     }
 
     fn parse_unary(&mut self) -> Result<ast::Expression, ParserError> {
         match &self.cur_token {
-            Token::Minus => {
+            TokenKind::Minus => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary {
@@ -428,7 +445,7 @@ impl Parser {
                     expression: Box::new(expr),
                 })
             }
-            Token::Tilde => {
+            TokenKind::Tilde => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary {
@@ -436,7 +453,7 @@ impl Parser {
                     expression: Box::new(expr),
                 })
             }
-            Token::Not => {
+            TokenKind::Not => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary {
@@ -444,7 +461,7 @@ impl Parser {
                     expression: Box::new(expr),
                 })
             }
-            Token::Increment => {
+            TokenKind::Increment => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary {
@@ -452,7 +469,7 @@ impl Parser {
                     expression: Box::new(expr),
                 })
             }
-            Token::Decrement => {
+            TokenKind::Decrement => {
                 self.next_token()?;
                 let expr = self.parse_expression(Precedence::Prefix)?;
                 Ok(ast::Expression::Unary {
@@ -466,11 +483,11 @@ impl Parser {
 
     fn parse_postfix(&mut self, lhs: ast::Expression) -> Result<ast::Expression, ParserError> {
         match &self.cur_token {
-            Token::Increment => Ok(ast::Expression::Postfix(
+            TokenKind::Increment => Ok(ast::Expression::Postfix(
                 ast::PostfixOperator::Increment,
                 Box::new(lhs),
             )),
-            Token::Decrement => Ok(ast::Expression::Postfix(
+            TokenKind::Decrement => Ok(ast::Expression::Postfix(
                 ast::PostfixOperator::Decrement,
                 Box::new(lhs),
             )),
@@ -483,23 +500,23 @@ impl Parser {
 
         let expr = self.parse_expression(Precedence::Lowest)?;
 
-        self.expect_peek(Token::CloseParen)?;
+        self.expect_peek(TokenKind::CloseParen)?;
 
         Ok(expr)
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match &self.cur_token {
-            Token::KWReturn => self.parse_return_statement(),
-            Token::KWIf => self.parse_if_statement(),
-            Token::KWGoto => self.parse_goto_statement(),
-            Token::Semicolon => Ok(ast::Statement::Null),
-            Token::Identifier(ident) if self.peek_token_is(&Token::Colon) => {
+            TokenKind::KWReturn => self.parse_return_statement(),
+            TokenKind::KWIf => self.parse_if_statement(),
+            TokenKind::KWGoto => self.parse_goto_statement(),
+            TokenKind::Semicolon => Ok(ast::Statement::Null),
+            TokenKind::Identifier(ident) if self.peek_token_is(&TokenKind::Colon) => {
                 self.parse_label_statement(ident.clone())
             }
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
-                self.expect_peek(Token::Semicolon)?;
+                self.expect_peek(TokenKind::Semicolon)?;
                 Ok(ast::Statement::Expression(expr))
             }
         }
@@ -510,25 +527,25 @@ impl Parser {
 
         let expr = self.parse_expression(Precedence::Lowest)?;
 
-        self.expect_peek(Token::Semicolon)?;
+        self.expect_peek(TokenKind::Semicolon)?;
 
         Ok(ast::Statement::Return(expr))
     }
 
     fn parse_goto_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        if let Token::Identifier(label_name) = self.peek_token.clone() {
+        if let TokenKind::Identifier(label_name) = self.peek_token.clone() {
             self.next_token()?;
-            self.expect_peek(Token::Semicolon)?;
+            self.expect_peek(TokenKind::Semicolon)?;
             Ok(ast::Statement::Goto(label_name.clone()))
         } else {
             Err(ParserError::UnexpectedToken {
-                expected: Token::Identifier(String::new()),
+                expected: TokenKind::Identifier(String::new()),
                 actual: self.peek_token.clone(),
             })
         }
     }
     fn parse_label_statement(&mut self, identifier: String) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(Token::Colon)?;
+        self.expect_peek(TokenKind::Colon)?;
         self.next_token()?;
         Ok(ast::Statement::Label(
             identifier,
@@ -537,15 +554,15 @@ impl Parser {
     }
 
     fn parse_if_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(Token::OpenParen)?;
+        self.expect_peek(TokenKind::OpenParen)?;
         self.next_token()?;
         let condition = self.parse_expression(Precedence::Lowest)?;
-        self.expect_peek(Token::CloseParen)?;
+        self.expect_peek(TokenKind::CloseParen)?;
         self.next_token()?;
         let stmt = self.parse_statement()?;
 
         let else_stmt = match self.peek_token {
-            Token::KWElse => {
+            TokenKind::KWElse => {
                 self.next_token()?;
                 self.next_token()?;
                 Some(Box::new(self.parse_statement()?))
@@ -562,20 +579,20 @@ impl Parser {
 
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
         match &self.cur_token {
-            Token::KWInt => {
+            TokenKind::KWInt => {
                 self.next_token()?;
 
-                if let Token::Identifier(ident) = self.cur_token.clone() {
+                if let TokenKind::Identifier(ident) = self.cur_token.clone() {
                     self.next_token()?;
                     match &self.cur_token {
-                        Token::Semicolon => Ok(ast::Declaration {
+                        TokenKind::Semicolon => Ok(ast::Declaration {
                             name: ident,
                             exp: None,
                         }),
-                        Token::Assign => {
+                        TokenKind::Assign => {
                             self.next_token()?;
                             let expr = self.parse_expression(self.cur_precedence())?;
-                            self.expect_peek(Token::Semicolon)?;
+                            self.expect_peek(TokenKind::Semicolon)?;
                             Ok(ast::Declaration {
                                 name: ident,
                                 exp: Some(expr),
@@ -587,7 +604,7 @@ impl Parser {
                     }
                 } else {
                     Err(ParserError::UnexpectedToken {
-                        expected: Token::Identifier(String::new()),
+                        expected: TokenKind::Identifier(String::new()),
                         actual: self.cur_token.clone(),
                     })
                 }
@@ -599,22 +616,22 @@ impl Parser {
     fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
         self.next_token()?;
         match &self.cur_token {
-            Token::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
+            TokenKind::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
             _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
         }
     }
 
     fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
-        self.expect(Token::KWInt)?;
-        if let Token::Identifier(name) = self.peek_token.clone() {
+        self.expect(TokenKind::KWInt)?;
+        if let TokenKind::Identifier(name) = self.peek_token.clone() {
             self.next_token()?;
-            self.expect_peek(Token::OpenParen)?;
-            self.expect_peek(Token::KWVoid)?;
-            self.expect_peek(Token::CloseParen)?;
-            self.expect_peek(Token::OpenBrace)?;
+            self.expect_peek(TokenKind::OpenParen)?;
+            self.expect_peek(TokenKind::KWVoid)?;
+            self.expect_peek(TokenKind::CloseParen)?;
+            self.expect_peek(TokenKind::OpenBrace)?;
 
             let mut body: Vec<BlockItem> = vec![];
-            while !self.peek_token_is(&Token::CloseBrace) {
+            while !self.peek_token_is(&TokenKind::CloseBrace) {
                 body.push(self.parse_block_item()?);
             }
             self.next_token()?; // Eat CloseBrace
@@ -625,7 +642,7 @@ impl Parser {
             })
         } else {
             Err(ParserError::UnexpectedToken {
-                expected: Token::Identifier("expected".to_owned()),
+                expected: TokenKind::Identifier("expected".to_owned()),
                 actual: self.cur_token.clone(),
             })
         }
@@ -638,20 +655,20 @@ impl Parser {
         Ok(())
     }
 
-    fn register_prefix(&mut self, token: Discriminant<Token>, func: PrefixFunction) {
+    fn register_prefix(&mut self, token: Discriminant<TokenKind>, func: PrefixFunction) {
         self.prefix_functions.insert(token, func);
     }
 
-    fn register_postfix(&mut self, token: Discriminant<Token>, func: PostfixFunction) {
+    fn register_postfix(&mut self, token: Discriminant<TokenKind>, func: PostfixFunction) {
         self.postfix_functions.insert(token, func);
     }
 
-    fn register_infix(&mut self, token: Discriminant<Token>, func: InfixFunction) {
+    fn register_infix(&mut self, token: Discriminant<TokenKind>, func: InfixFunction) {
         self.infix_functions.insert(token, func);
     }
 
     /// Expects current token to, but does not advance
-    fn expect(&mut self, expected: Token) -> Result<(), ParserError> {
+    fn expect(&mut self, expected: TokenKind) -> Result<(), ParserError> {
         if mem::discriminant(&expected) == mem::discriminant(&self.cur_token) {
             return Ok(());
         }
@@ -661,7 +678,7 @@ impl Parser {
         })
     }
 
-    fn expect_peek(&mut self, expected: Token) -> Result<(), ParserError> {
+    fn expect_peek(&mut self, expected: TokenKind) -> Result<(), ParserError> {
         if mem::discriminant(&expected) == mem::discriminant(&self.peek_token) {
             self.next_token()?;
             return Ok(());
@@ -672,7 +689,7 @@ impl Parser {
         })
     }
 
-    fn peek_token_is(&self, token: &Token) -> bool {
+    fn peek_token_is(&self, token: &TokenKind) -> bool {
         mem::discriminant(&self.peek_token) == mem::discriminant(token)
     }
 
