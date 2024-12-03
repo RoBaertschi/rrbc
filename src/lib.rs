@@ -7,7 +7,6 @@ pub mod driver;
 #[cfg(feature = "emit")]
 pub mod emit;
 pub mod lexer;
-pub mod new_parser;
 pub mod parser;
 #[cfg(feature = "validate")]
 pub mod semantic_analysis;

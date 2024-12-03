@@ -80,9 +80,10 @@ pub enum TokenKind {
     KWGoto,
 }
 
+#[derive(Debug, Clone)]
 pub struct Token {
-    kind: TokenKind,
-    loc: Loc,
+    pub kind: TokenKind,
+    pub loc: Loc,
 }
 
 impl TokenKind {
@@ -161,7 +162,7 @@ impl<'a> Lexer<'a> {
         self.loc.column += 1;
     }
 
-    fn read_constant(&mut self) -> Result<i32, LexerError> {
+    fn read_constant(&mut self) -> Result<Token, LexerError> {
         let old_loc = self.loc;
         let mut string = String::new();
 
@@ -178,22 +179,31 @@ impl<'a> Lexer<'a> {
             .parse()
             .or(Err(LexerError::InvalidNumber(string.to_owned())))?;
 
-        Ok(num)
+        Ok(Token {
+            kind: TokenKind::Constant(num),
+            loc: old_loc,
+        })
     }
 
-    fn read_identifier(&mut self) -> TokenKind {
-        let old_pos = self.pos;
+    fn read_identifier(&mut self) -> Token {
+        let old_loc = self.loc;
+        let mut string = String::new();
+
         while self.is_valid_identifier_char() {
+            string.push(self.ch);
             self.read_char();
         }
-
-        let string = &self.input[old_pos..self.pos];
-
-        TokenKind::from_string(string)
+        Token {
+            kind: TokenKind::from_string(&string),
+            loc: old_loc,
+        }
     }
 
-    pub fn next_token(&mut self) -> Result<TokenKind, LexerError> {
+    pub fn next_token(&mut self) -> Result<Token, LexerError> {
         self.skip_whitespace();
+
+        let old_loc = self.loc;
+
         let result = match self.ch {
             '(' => TokenKind::OpenParen,
             ')' => TokenKind::CloseParen,
@@ -322,10 +332,15 @@ impl<'a> Lexer<'a> {
                     TokenKind::Assign
                 }
             }
-            '\0' => return Ok(TokenKind::Eof),
+            '\0' => {
+                return Ok(Token {
+                    kind: TokenKind::Eof,
+                    loc: self.loc,
+                })
+            }
             _ => {
                 if self.is_digit() {
-                    return Ok(TokenKind::Constant(self.read_constant()?));
+                    return Ok(self.read_constant()?);
                 } else if self.is_valid_identifier_char() {
                     return Ok(self.read_identifier());
                 }
@@ -335,18 +350,23 @@ impl<'a> Lexer<'a> {
         };
 
         self.read_char();
-        Ok(result)
+        Ok(Token {
+            kind: result,
+            loc: old_loc,
+        })
     }
 }
 
-impl Iterator for Lexer {
-    type Item = Result<TokenKind, LexerError>;
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Result<Token, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.next_token();
 
-        if let Ok(TokenKind::Eof) = token {
-            return None;
+        if let Ok(ref tok) = token {
+            if let TokenKind::Eof = tok.kind {
+                return None;
+            }
         }
 
         return Some(token);
@@ -359,14 +379,13 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let mut lexer = Lexer::new(
-            r"
+        let input = r"
             int main(void) {
                 return 2;
             }
-        "
-            .to_owned(),
-        );
+            "
+        .to_owned();
+        let mut lexer = Lexer::new(&input);
         let expected: Vec<_> = vec![
             TokenKind::KWInt,
             TokenKind::Identifier("main".to_owned()),
@@ -390,12 +409,11 @@ mod tests {
 
     #[test]
     fn test_all_compound_assignment() {
-        let mut lexer = Lexer::new(
-            r"
+        let input = r"
         += -= *= /= %= &= |= ^= <<= >>= ++ --
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let mut lexer = Lexer::new(&input);
 
         let expected: Vec<_> = vec![
             TokenKind::PlusAssign,
@@ -422,7 +440,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_backslash() {
-        let mut lexer = Lexer::new("\\".to_owned());
+        let input = "\\".to_owned();
+        let mut lexer = Lexer::new(&input);
 
         let token = lexer.next_token().expect("Should fail");
 

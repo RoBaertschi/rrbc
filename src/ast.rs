@@ -1,4 +1,3 @@
-use crate::new_parser::ParserError;
 #[cfg(feature = "tacky")]
 use crate::tacky;
 
@@ -28,7 +27,6 @@ pub enum Expression {
         r#else: Box<Expression>,
     },
     Postfix(PostfixOperator, Box<Expression>),
-    Error(ParserError),
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
