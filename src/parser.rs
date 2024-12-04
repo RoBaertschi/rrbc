@@ -110,6 +110,71 @@ impl Parser {
             postfix_functions: HashMap::new(),
             infix_functions: HashMap::new(),
         };
+        // Prefix
+        parser.register_prefix(&TokenKind::Constant(1), Self::parse_constant);
+        parser.register_prefix(&TokenKind::Minus, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Tilde, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Not, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Increment, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Decrement, Self::parse_unary);
+        parser.register_prefix(&TokenKind::OpenParen, Self::parse_grouped_expression);
+        parser.register_prefix(
+            &TokenKind::Identifier(String::new()),
+            Self::parse_identifier,
+        );
+
+        // Infix
+        parser.register_infix(&TokenKind::Plus, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Minus, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Asterisk, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Slash, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Percent, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::ShiftLeft, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::ShiftRight, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::BitwiseAnd, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Xor, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::BitwiseOr, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Or, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::And, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::LessThan, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::LessOrEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::GreaterThan, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::GreaterOrEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Equal, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::NotEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Assign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::PlusAssign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::MinusAssign, Self::parse_assignment_expression);
+        parser.register_infix(
+            &TokenKind::AsteriskAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(&TokenKind::SlashAssign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::PercentAssign, Self::parse_assignment_expression);
+        parser.register_infix(
+            &TokenKind::BitwiseAndAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            &TokenKind::BitwiseOrAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            &TokenKind::BitwiseXorAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            &TokenKind::BitwiseShiftLeftAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(
+            &TokenKind::BitwiseShiftRightAssign,
+            Self::parse_assignment_expression,
+        );
+        parser.register_infix(&TokenKind::QuestionMark, Self::parse_conditional);
+
+        parser.register_postfix(&TokenKind::Increment, Self::parse_postfix);
+        parser.register_postfix(&TokenKind::Decrement, Self::parse_postfix);
 
         parser.next_token()?;
         parser.next_token()?;

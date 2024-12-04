@@ -1,7 +1,4 @@
-use std::{
-    str::Chars,
-    vec::{IntoIter, Splice},
-};
+use std::vec::IntoIter;
 
 use thiserror::Error;
 
@@ -105,7 +102,7 @@ impl TokenKind {
 
 #[derive(Debug)]
 pub struct Lexer {
-    input: String,
+    _input: String,
     chars: IntoIter<char>,
     loc: Loc,
 
@@ -117,7 +114,7 @@ impl Lexer {
     pub fn new(input: String) -> Self {
         let mut lexer = Self {
             chars: input.chars().collect::<Vec<_>>().into_iter(),
-            input,
+            _input: input,
             ch: '\0',
             peek_ch: '\0',
 
