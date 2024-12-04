@@ -1,4 +1,7 @@
-use std::{str::Chars, vec::Splice};
+use std::{
+    str::Chars,
+    vec::{IntoIter, Splice},
+};
 
 use thiserror::Error;
 
@@ -101,20 +104,20 @@ impl TokenKind {
 }
 
 #[derive(Debug)]
-pub struct Lexer<'a> {
-    input: &'a String,
-    chars: Chars<'a>,
+pub struct Lexer {
+    input: String,
+    chars: IntoIter<char>,
     loc: Loc,
 
     ch: char,
     peek_ch: char,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(input: &'a String) -> Self {
+impl Lexer {
+    pub fn new(input: String) -> Self {
         let mut lexer = Self {
+            chars: input.chars().collect::<Vec<_>>().into_iter(),
             input,
-            chars: input.chars(),
             ch: '\0',
             peek_ch: '\0',
 
@@ -357,7 +360,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
+impl<'a> Iterator for Lexer {
     type Item = Result<Token, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -385,7 +388,7 @@ mod tests {
             }
             "
         .to_owned();
-        let mut lexer = Lexer::new(&input);
+        let mut lexer = Lexer::new(input);
         let expected: Vec<_> = vec![
             TokenKind::KWInt,
             TokenKind::Identifier("main".to_owned()),
@@ -403,7 +406,7 @@ mod tests {
         for expected_token in expected {
             let token = lexer.next_token().expect("should return token");
 
-            assert_eq!(expected_token, token);
+            assert_eq!(expected_token, token.kind);
         }
     }
 
@@ -413,7 +416,7 @@ mod tests {
         += -= *= /= %= &= |= ^= <<= >>= ++ --
         "
         .to_owned();
-        let mut lexer = Lexer::new(&input);
+        let mut lexer = Lexer::new(input);
 
         let expected: Vec<_> = vec![
             TokenKind::PlusAssign,
@@ -433,7 +436,7 @@ mod tests {
         for expected_token in expected {
             let token = lexer.next_token().expect("should return token");
 
-            assert_eq!(expected_token, token);
+            assert_eq!(expected_token, token.kind);
         }
     }
 
@@ -441,7 +444,7 @@ mod tests {
     #[should_panic]
     fn test_backslash() {
         let input = "\\".to_owned();
-        let mut lexer = Lexer::new(&input);
+        let mut lexer = Lexer::new(input);
 
         let token = lexer.next_token().expect("Should fail");
 

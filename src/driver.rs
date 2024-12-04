@@ -65,15 +65,14 @@ pub enum Stage {
 }
 
 #[derive(Default)]
-pub struct Options<'a> {
+pub struct Options {
     stage: Stage,
     input_file: PathBuf,
     preprocessed_file: PathBuf,
     assembly_file: PathBuf,
     output_file: PathBuf,
 
-    input: String,
-    lexer: Option<lexer::Lexer<'a>>,
+    lexer: Option<lexer::Lexer>,
 }
 
 fn print_help(file: Option<String>) -> ! {
@@ -96,7 +95,7 @@ fn is_flag(string: &str) -> Option<Stage> {
     }
 }
 
-impl<'a> Options<'a> {
+impl Options {
     /// This function will exit if the args don't match what was expected.
     pub fn parse_args(mut args: Args) -> Self {
         let target = args.next();
@@ -212,10 +211,10 @@ impl<'a> Options<'a> {
         Ok(())
     }
 
-    pub fn run_lexer<'b: 'a>(&'b mut self) -> Result<(), DriverExecutionError> {
-        self.input = fs::read_to_string(&self.preprocessed_file)?;
+    pub fn run_lexer(&mut self) -> Result<(), DriverExecutionError> {
+        let input = fs::read_to_string(&self.preprocessed_file)?;
 
-        let lexer = lexer::Lexer::new(&self.input);
+        let lexer = lexer::Lexer::new(input);
 
         if let Stage::Lex = self.stage {
             for tok in lexer {

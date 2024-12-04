@@ -84,8 +84,8 @@ type PostfixFunction = fn(&mut Parser, ast::Expression) -> Result<ast::Expressio
 type InfixFunction = fn(&mut Parser, ast::Expression) -> Result<ast::Expression, ParserError>;
 
 #[derive(Debug)]
-pub struct Parser<'a> {
-    lexer: Lexer<'a>,
+pub struct Parser {
+    lexer: Lexer,
     cur_token: Token,
     peek_token: Token,
 
@@ -94,8 +94,8 @@ pub struct Parser<'a> {
     infix_functions: HashMap<Discriminant<TokenKind>, InfixFunction>,
 }
 
-impl<'a> Parser<'a> {
-    pub fn try_build(lexer: Lexer<'a>) -> Result<Self, ParserError> {
+impl Parser {
+    pub fn try_build(lexer: Lexer) -> Result<Self, ParserError> {
         let mut parser = Self {
             lexer,
             cur_token: Token {
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn test_declaration() {
         let input = "int main(void) { int a = hello; int b; }".to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
 
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
@@ -587,7 +587,7 @@ mod tests {
         }
         "
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -618,7 +618,7 @@ mod tests {
         }
         "#
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -652,7 +652,7 @@ mod tests {
         }
         "
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -690,7 +690,7 @@ mod tests {
         }
         "
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -724,7 +724,7 @@ mod tests {
         }
         "
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -759,7 +759,7 @@ mod tests {
         }
         "
         .to_owned();
-        let lexer = Lexer::new(&input);
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
