@@ -6,8 +6,8 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    ast::{self, BinaryOperator, BlockItem, Expression},
-    lexer::{Lexer, LexerError, Token},
+    ast::{self, BinaryOperator},
+    lexer::{Lexer, LexerError, Loc, Token, TokenKind},
 };
 
 #[derive(PartialEq, PartialOrd)]
@@ -29,61 +29,54 @@ enum Precedence {
 }
 
 impl Precedence {
-    pub fn from_token(token: &Token) -> Option<Self> {
+    pub fn from_token(token: &TokenKind) -> Option<Self> {
         Some(match token {
-            Token::Plus => Self::Sum,
-            Token::Minus => Self::Sum,
-            Token::Asterisk => Self::Product,
-            Token::Slash => Self::Product,
-            Token::Percent => Self::Product,
-            Token::BitwiseAnd => Self::BitwiseAnd,
-            Token::BitwiseOr => Self::BitwiseOr,
-            Token::Xor => Self::Xor,
-            Token::ShiftLeft | Token::ShiftRight => Self::Shift,
-            Token::Or => Self::Or,
-            Token::And => Self::And,
-            Token::Equal | Token::NotEqual => Self::Equal,
-            Token::LessThan | Token::LessOrEqual | Token::GreaterThan | Token::GreaterOrEqual => {
-                Self::Ordered
-            }
-            Token::Assign
-            | Token::PlusAssign
-            | Token::MinusAssign
-            | Token::AsteriskAssign
-            | Token::SlashAssign
-            | Token::PercentAssign
-            | Token::BitwiseAndAssign
-            | Token::BitwiseOrAssign
-            | Token::BitwiseXorAssign
-            | Token::BitwiseShiftLeftAssign
-            | Token::BitwiseShiftRightAssign => Self::Assignment,
-            Token::QuestionMark => Self::Conditional,
+            TokenKind::Plus => Self::Sum,
+            TokenKind::Minus => Self::Sum,
+            TokenKind::Asterisk => Self::Product,
+            TokenKind::Slash => Self::Product,
+            TokenKind::Percent => Self::Product,
+            TokenKind::BitwiseAnd => Self::BitwiseAnd,
+            TokenKind::BitwiseOr => Self::BitwiseOr,
+            TokenKind::Xor => Self::Xor,
+            TokenKind::ShiftLeft | TokenKind::ShiftRight => Self::Shift,
+            TokenKind::Or => Self::Or,
+            TokenKind::And => Self::And,
+            TokenKind::Equal | TokenKind::NotEqual => Self::Equal,
+            TokenKind::LessThan
+            | TokenKind::LessOrEqual
+            | TokenKind::GreaterThan
+            | TokenKind::GreaterOrEqual => Self::Ordered,
+            TokenKind::Assign
+            | TokenKind::PlusAssign
+            | TokenKind::MinusAssign
+            | TokenKind::AsteriskAssign
+            | TokenKind::SlashAssign
+            | TokenKind::PercentAssign
+            | TokenKind::BitwiseAndAssign
+            | TokenKind::BitwiseOrAssign
+            | TokenKind::BitwiseXorAssign
+            | TokenKind::BitwiseShiftLeftAssign
+            | TokenKind::BitwiseShiftRightAssign => Self::Assignment,
+            TokenKind::QuestionMark => Self::Conditional,
             _ => return None,
         })
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParserError {
-    /// 1. Is the expected token
-    /// 2. is the received token
-    /// Also, don't forget to not print the values, only the type should be printed.
-    #[error("Unexpected Token, expected: \"{expected:?}\", actual: \"{actual:?}\"")]
-    UnexpectedToken { expected: Token, actual: Token },
-    #[error("{0:?}")]
+    #[error("{0}")]
     LexerError(#[from] LexerError),
-    #[error("Could not parse a declaration, offending token: {0:?}. parse_declaration got called on a invalid token for a declaration.")]
-    CouldNotParseDeclaration(Token),
+    #[error("Unexpected Token, expected: \"{expected:?}\", actual: \"{actual:?}\"")]
+    UnexpectedToken {
+        expected: TokenKind,
+        actual: TokenKind,
+    },
     #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
-    DeclarationExpectedAssignOrSemicolon(Token),
+    DeclarationExpectedAssignOrSemicolon(TokenKind),
     #[error("Could not find a prefix function for \"{0:?}\".")]
-    NoPrefixFunction(Token),
-    #[error("Could not find a postfix function for \"{0:?}\".")]
-    NoPostfixOperatorFound(Token),
-    #[error("Could not find unary operator for \"{0:?}\". This indicates a missuse of parse_unary or a missing branch in parse_unary.")]
-    NoUnaryOperatorFound(Token),
-    #[error("Could not find binary operator for \"{0:?}\". This indicates a missuse of parse_binary or a missing branch in parse_binary.")]
-    NoBinaryOperatorFound(Token),
+    NoPrefixFunction(TokenKind),
 }
 
 type PrefixFunction = fn(&mut Parser) -> Result<ast::Expression, ParserError>;
@@ -95,159 +88,93 @@ pub struct Parser {
     lexer: Lexer,
     cur_token: Token,
     peek_token: Token,
-    prefix_functions: HashMap<Discriminant<Token>, PrefixFunction>,
-    postfix_functions: HashMap<Discriminant<Token>, PostfixFunction>,
-    infix_functions: HashMap<Discriminant<Token>, InfixFunction>,
+
+    prefix_functions: HashMap<Discriminant<TokenKind>, PrefixFunction>,
+    postfix_functions: HashMap<Discriminant<TokenKind>, PostfixFunction>,
+    infix_functions: HashMap<Discriminant<TokenKind>, InfixFunction>,
 }
 
 impl Parser {
-    pub fn try_build(lexer: Lexer) -> Result<Self, LexerError> {
+    pub fn try_build(lexer: Lexer) -> Result<Self, ParserError> {
         let mut parser = Self {
             lexer,
-            cur_token: Token::Eof,
-            peek_token: Token::Eof,
+            cur_token: Token {
+                kind: TokenKind::Eof,
+                loc: Loc { line: 0, column: 0 },
+            },
+            peek_token: Token {
+                kind: TokenKind::Eof,
+                loc: Loc { line: 0, column: 0 },
+            },
             prefix_functions: HashMap::new(),
             postfix_functions: HashMap::new(),
             infix_functions: HashMap::new(),
         };
-
         // Prefix
-        parser.register_prefix(mem::discriminant(&Token::Constant(1)), Self::parse_constant);
-        parser.register_prefix(mem::discriminant(&Token::Minus), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Tilde), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Not), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Increment), Self::parse_unary);
-        parser.register_prefix(mem::discriminant(&Token::Decrement), Self::parse_unary);
+        parser.register_prefix(&TokenKind::Constant(1), Self::parse_constant);
+        parser.register_prefix(&TokenKind::Minus, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Tilde, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Not, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Increment, Self::parse_unary);
+        parser.register_prefix(&TokenKind::Decrement, Self::parse_unary);
+        parser.register_prefix(&TokenKind::OpenParen, Self::parse_grouped_expression);
         parser.register_prefix(
-            mem::discriminant(&Token::OpenParen),
-            Self::parse_grouped_expression,
-        );
-        parser.register_prefix(
-            mem::discriminant(&Token::Identifier(String::new())),
+            &TokenKind::Identifier(String::new()),
             Self::parse_identifier,
         );
 
         // Infix
+        parser.register_infix(&TokenKind::Plus, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Minus, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Asterisk, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Slash, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Percent, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::ShiftLeft, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::ShiftRight, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::BitwiseAnd, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Xor, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::BitwiseOr, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Or, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::And, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::LessThan, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::LessOrEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::GreaterThan, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::GreaterOrEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Equal, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::NotEqual, Self::parse_binary_expression);
+        parser.register_infix(&TokenKind::Assign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::PlusAssign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::MinusAssign, Self::parse_assignment_expression);
         parser.register_infix(
-            mem::discriminant(&Token::Plus),
-            Self::parse_binary_expression,
+            &TokenKind::AsteriskAssign,
+            Self::parse_assignment_expression,
         );
+        parser.register_infix(&TokenKind::SlashAssign, Self::parse_assignment_expression);
+        parser.register_infix(&TokenKind::PercentAssign, Self::parse_assignment_expression);
         parser.register_infix(
-            mem::discriminant(&Token::Minus),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Asterisk),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Slash),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Percent),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::ShiftLeft),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::ShiftRight),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseAnd),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Xor),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseOr),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(mem::discriminant(&Token::Or), Self::parse_binary_expression);
-        parser.register_infix(
-            mem::discriminant(&Token::And),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::LessThan),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::LessOrEqual),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::GreaterThan),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::GreaterOrEqual),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Equal),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::NotEqual),
-            Self::parse_binary_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::Assign),
+            &TokenKind::BitwiseAndAssign,
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::PlusAssign),
+            &TokenKind::BitwiseOrAssign,
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::MinusAssign),
+            &TokenKind::BitwiseXorAssign,
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::AsteriskAssign),
+            &TokenKind::BitwiseShiftLeftAssign,
             Self::parse_assignment_expression,
         );
         parser.register_infix(
-            mem::discriminant(&Token::SlashAssign),
+            &TokenKind::BitwiseShiftRightAssign,
             Self::parse_assignment_expression,
         );
-        parser.register_infix(
-            mem::discriminant(&Token::PercentAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseAndAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseOrAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseXorAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseShiftLeftAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::BitwiseShiftRightAssign),
-            Self::parse_assignment_expression,
-        );
-        parser.register_infix(
-            mem::discriminant(&Token::QuestionMark),
-            Self::parse_conditional,
-        );
+        parser.register_infix(&TokenKind::QuestionMark, Self::parse_conditional);
 
-        parser.register_postfix(mem::discriminant(&Token::Increment), Self::parse_postfix);
-        parser.register_postfix(mem::discriminant(&Token::Decrement), Self::parse_postfix);
+        parser.register_postfix(&TokenKind::Increment, Self::parse_postfix);
+        parser.register_postfix(&TokenKind::Decrement, Self::parse_postfix);
 
         parser.next_token()?;
         parser.next_token()?;
@@ -255,251 +182,149 @@ impl Parser {
         Ok(parser)
     }
 
-    pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
-        let func = self.parse_function_definition()?;
+    fn next_token(&mut self) -> Result<(), LexerError> {
+        self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token()?);
+        Ok(())
+    }
 
-        self.expect_peek(Token::Eof)?;
+    fn register_prefix(&mut self, token: &TokenKind, func: PrefixFunction) {
+        self.prefix_functions.insert(mem::discriminant(token), func);
+    }
+
+    fn register_postfix(&mut self, token: &TokenKind, func: PostfixFunction) {
+        self.postfix_functions
+            .insert(mem::discriminant(token), func);
+    }
+
+    fn register_infix(&mut self, token: &TokenKind, func: InfixFunction) {
+        self.infix_functions.insert(mem::discriminant(token), func);
+    }
+
+    fn expect(&mut self, expected: TokenKind) -> Result<(), ParserError> {
+        if mem::discriminant(&expected) == mem::discriminant(&self.cur_token.kind) {
+            Ok(())
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected,
+                actual: self.cur_token.kind.clone(),
+            })
+        }
+    }
+
+    fn expect_peek(&mut self, expected: TokenKind) -> Result<(), ParserError> {
+        if mem::discriminant(&expected) == mem::discriminant(&self.peek_token.kind) {
+            self.next_token()?;
+            Ok(())
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected,
+                actual: self.cur_token.kind.clone(),
+            })
+        }
+    }
+
+    fn peek_token_is(&self, token: TokenKind) -> bool {
+        mem::discriminant(&self.peek_token.kind) == mem::discriminant(&token)
+    }
+
+    fn peek_precedence(&self) -> Precedence {
+        Precedence::from_token(&self.peek_token.kind).unwrap_or(Precedence::Lowest)
+    }
+
+    fn cur_precedence(&self) -> Precedence {
+        Precedence::from_token(&self.cur_token.kind).unwrap_or(Precedence::Lowest)
+    }
+
+    pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
+        let function_definition = self.parse_function_definition()?;
+
+        self.expect_peek(TokenKind::Eof)?;
 
         Ok(ast::Program {
-            function_definition: func,
+            function_definition,
         })
     }
 
-    fn parse_expression_try_postfix(
-        &mut self,
-        mut left_exp: ast::Expression,
-    ) -> Result<ast::Expression, ParserError> {
-        while self
-            .postfix_functions
-            .contains_key(&mem::discriminant(&self.peek_token))
-        {
+    fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
+        self.expect(TokenKind::KWInt)?;
+        if let TokenKind::Identifier(name) = self.peek_token.kind.clone() {
             self.next_token()?;
-            let postfix = self
-                .postfix_functions
-                .get(&mem::discriminant(&self.cur_token));
+            self.expect_peek(TokenKind::OpenParen)?;
+            self.expect_peek(TokenKind::KWVoid)?;
+            self.expect_peek(TokenKind::CloseParen)?;
+            self.expect_peek(TokenKind::OpenBrace)?;
 
-            if let Some(postfix) = postfix {
-                left_exp = postfix(self, left_exp)?;
+            let mut body: Vec<ast::BlockItem> = vec![];
+            while !self.peek_token_is(TokenKind::CloseBrace) {
+                body.push(self.parse_block_item()?);
             }
+            self.next_token()?; // Eat CloseBrace
+
+            Ok(ast::FunctionDefinition {
+                name: name.to_string(),
+                body,
+            })
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected: TokenKind::Identifier("expected".to_owned()),
+                actual: self.cur_token.kind.clone(),
+            })
         }
-        return Ok(left_exp);
     }
 
-    fn parse_expression(&mut self, precedence: Precedence) -> Result<ast::Expression, ParserError> {
-        let prefix = self
-            .prefix_functions
-            .get(&mem::discriminant(&self.cur_token));
+    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
+        self.next_token()?;
+        match &self.cur_token.kind {
+            TokenKind::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
+            _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
+        }
+    }
 
-        match prefix {
-            Some(prefix) => {
-                let mut left_exp = prefix(self)?;
+    fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
+        self.next_token()?;
 
-                while !self.peek_token_is(&Token::Semicolon) && precedence < self.peek_precedence()
-                {
-                    if self
-                        .infix_functions
-                        .contains_key(&mem::discriminant(&self.peek_token))
-                    {
-                        self.next_token()?;
-                        left_exp = self
-                            .infix_functions
-                            .get(&mem::discriminant(&self.cur_token))
-                            .unwrap()(self, left_exp)?;
-                    } else {
-                        return self.parse_expression_try_postfix(left_exp);
-                    }
+        if let TokenKind::Identifier(ident) = self.cur_token.kind.clone() {
+            self.next_token()?;
+            match &self.cur_token.kind {
+                TokenKind::Semicolon => Ok(ast::Declaration {
+                    name: ident,
+                    exp: None,
+                }),
+                TokenKind::Assign => {
+                    self.next_token()?;
+                    let expr = self.parse_expression(self.cur_precedence())?;
+                    self.expect_peek(TokenKind::Semicolon)?;
+                    Ok(ast::Declaration {
+                        name: ident,
+                        exp: Some(expr),
+                    })
                 }
-
-                self.parse_expression_try_postfix(left_exp)
+                tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
+                    tok.clone(),
+                )),
             }
-            None => Err(ParserError::NoPrefixFunction(self.cur_token.clone())),
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected: TokenKind::Identifier(String::new()),
+                actual: self.cur_token.kind.clone(),
+            })
         }
     }
 
-    fn parse_binary_expression(
-        &mut self,
-        left: ast::Expression,
-    ) -> Result<ast::Expression, ParserError> {
-        let bin = match &self.cur_token {
-            Token::Plus => BinaryOperator::Add,
-            Token::Minus => BinaryOperator::Subtract,
-            Token::Asterisk => BinaryOperator::Multiply,
-            Token::Slash => BinaryOperator::Divide,
-            Token::Percent => BinaryOperator::Reminder,
-            Token::ShiftLeft => BinaryOperator::ShiftLeft,
-            Token::ShiftRight => BinaryOperator::ShiftRight,
-            Token::BitwiseAnd => BinaryOperator::BitwiseAnd,
-            Token::Xor => BinaryOperator::Xor,
-            Token::BitwiseOr => BinaryOperator::BitwiseOr,
-            Token::Equal => BinaryOperator::Equal,
-            Token::NotEqual => BinaryOperator::NotEqual,
-            Token::And => BinaryOperator::And,
-            Token::Or => BinaryOperator::Or,
-            Token::LessThan => BinaryOperator::LessThan,
-            Token::LessOrEqual => BinaryOperator::LessOrEqual,
-            Token::GreaterThan => BinaryOperator::GreaterThan,
-            Token::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
-            tok => return Err(ParserError::NoBinaryOperatorFound(tok.clone())),
-        };
-
-        let precedence = self.cur_precedence();
-        self.next_token()?;
-        let right = self.parse_expression(precedence)?;
-
-        Ok(Expression::Binary {
-            op: bin,
-            lhs: Box::new(left),
-            rhs: Box::new(right),
-        })
-    }
-
-    fn parse_assignment_expression(
-        &mut self,
-        left: ast::Expression,
-    ) -> Result<ast::Expression, ParserError> {
-        let op: ast::AssignmentOperator = match self.cur_token {
-            Token::Assign => ast::AssignmentOperator::None,
-            Token::PlusAssign => ast::AssignmentOperator::Add,
-            Token::MinusAssign => ast::AssignmentOperator::Subtract,
-            Token::AsteriskAssign => ast::AssignmentOperator::Multiply,
-            Token::SlashAssign => ast::AssignmentOperator::Divide,
-            Token::PercentAssign => ast::AssignmentOperator::Reminder,
-            Token::BitwiseAndAssign => ast::AssignmentOperator::BitwiseAnd,
-            Token::BitwiseOrAssign => ast::AssignmentOperator::BitwiseOr,
-            Token::BitwiseXorAssign => ast::AssignmentOperator::BitwiseXor,
-            Token::BitwiseShiftLeftAssign => ast::AssignmentOperator::ShiftLeft,
-            Token::BitwiseShiftRightAssign => ast::AssignmentOperator::ShiftRight,
-            _ => unreachable!(
-                "Wrong token passed to parse_assignment_expression, should not happen."
-            ),
-        };
-
-        self.next_token()?;
-        let right = self.parse_expression(Precedence::Lowest)?;
-        Ok(Expression::Assignment {
-            op,
-            lhs: Box::new(left),
-            rhs: Box::new(right),
-        })
-    }
-
-    fn parse_conditional(&mut self, left: ast::Expression) -> Result<ast::Expression, ParserError> {
-        self.next_token()?;
-        let then = Box::new(self.parse_expression(Precedence::Lowest)?);
-        self.expect_peek(Token::Colon)?;
-        self.next_token()?;
-        let r#else = Box::new(self.parse_expression(Precedence::Assignment)?);
-        Ok(Expression::Conditional {
-            condition: Box::new(left),
-            then,
-            r#else,
-        })
-    }
-
-    fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
-        if let Token::Constant(val) = &self.cur_token {
-            return Ok(ast::Expression::Constant(*val));
-        }
-
-        Err(ParserError::UnexpectedToken {
-            expected: Token::Constant(0),
-            actual: self.cur_token.clone(),
-        })
-    }
-
-    fn parse_identifier(&mut self) -> Result<ast::Expression, ParserError> {
-        if let Token::Identifier(val) = self.cur_token.clone() {
-            return Ok(ast::Expression::Var(val));
-        }
-
-        Err(ParserError::UnexpectedToken {
-            expected: Token::Identifier(String::new()),
-            actual: self.cur_token.clone(),
-        })
-    }
-
-    fn parse_unary(&mut self) -> Result<ast::Expression, ParserError> {
-        match &self.cur_token {
-            Token::Minus => {
-                self.next_token()?;
-                let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary {
-                    op: ast::UnaryOperator::Negate,
-                    expression: Box::new(expr),
-                })
-            }
-            Token::Tilde => {
-                self.next_token()?;
-                let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary {
-                    op: ast::UnaryOperator::Complement,
-                    expression: Box::new(expr),
-                })
-            }
-            Token::Not => {
-                self.next_token()?;
-                let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary {
-                    op: ast::UnaryOperator::Not,
-                    expression: Box::new(expr),
-                })
-            }
-            Token::Increment => {
-                self.next_token()?;
-                let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary {
-                    op: ast::UnaryOperator::Increment,
-                    expression: Box::new(expr),
-                })
-            }
-            Token::Decrement => {
-                self.next_token()?;
-                let expr = self.parse_expression(Precedence::Prefix)?;
-                Ok(ast::Expression::Unary {
-                    op: ast::UnaryOperator::Decrement,
-                    expression: Box::new(expr),
-                })
-            }
-            _ => Err(ParserError::NoUnaryOperatorFound(self.cur_token.clone())),
-        }
-    }
-
-    fn parse_postfix(&mut self, lhs: ast::Expression) -> Result<ast::Expression, ParserError> {
-        match &self.cur_token {
-            Token::Increment => Ok(ast::Expression::Postfix(
-                ast::PostfixOperator::Increment,
-                Box::new(lhs),
-            )),
-            Token::Decrement => Ok(ast::Expression::Postfix(
-                ast::PostfixOperator::Decrement,
-                Box::new(lhs),
-            )),
-            _ => Err(ParserError::NoPostfixOperatorFound(self.cur_token.clone())),
-        }
-    }
-
-    fn parse_grouped_expression(&mut self) -> Result<ast::Expression, ParserError> {
-        self.next_token()?;
-
-        let expr = self.parse_expression(Precedence::Lowest)?;
-
-        self.expect_peek(Token::CloseParen)?;
-
-        Ok(expr)
-    }
+    // Statements
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        match &self.cur_token {
-            Token::KWReturn => self.parse_return_statement(),
-            Token::KWIf => self.parse_if_statement(),
-            Token::KWGoto => self.parse_goto_statement(),
-            Token::Semicolon => Ok(ast::Statement::Null),
-            Token::Identifier(ident) if self.peek_token_is(&Token::Colon) => {
+        match &self.cur_token.kind {
+            TokenKind::KWReturn => self.parse_return_statement(),
+            TokenKind::KWIf => self.parse_if_statement(),
+            TokenKind::KWGoto => self.parse_goto_statement(),
+            TokenKind::Semicolon => Ok(ast::Statement::Null),
+            TokenKind::Identifier(ident) if self.peek_token_is(TokenKind::Colon) => {
                 self.parse_label_statement(ident.clone())
             }
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
-                self.expect_peek(Token::Semicolon)?;
+                self.expect_peek(TokenKind::Semicolon)?;
                 Ok(ast::Statement::Expression(expr))
             }
         }
@@ -510,25 +335,26 @@ impl Parser {
 
         let expr = self.parse_expression(Precedence::Lowest)?;
 
-        self.expect_peek(Token::Semicolon)?;
+        self.expect_peek(TokenKind::Semicolon)?;
 
         Ok(ast::Statement::Return(expr))
     }
 
     fn parse_goto_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        if let Token::Identifier(label_name) = self.peek_token.clone() {
+        if let TokenKind::Identifier(label_name) = self.peek_token.kind.clone() {
             self.next_token()?;
-            self.expect_peek(Token::Semicolon)?;
-            Ok(ast::Statement::Goto(label_name.clone()))
+            self.expect_peek(TokenKind::Semicolon)?;
+            Ok(ast::Statement::Goto(label_name))
         } else {
             Err(ParserError::UnexpectedToken {
-                expected: Token::Identifier(String::new()),
-                actual: self.peek_token.clone(),
+                expected: TokenKind::Identifier(String::new()),
+                actual: self.peek_token.kind.clone(),
             })
         }
     }
+
     fn parse_label_statement(&mut self, identifier: String) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(Token::Colon)?;
+        self.expect_peek(TokenKind::Colon)?;
         self.next_token()?;
         Ok(ast::Statement::Label(
             identifier,
@@ -537,15 +363,15 @@ impl Parser {
     }
 
     fn parse_if_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(Token::OpenParen)?;
+        self.expect_peek(TokenKind::OpenParen)?;
         self.next_token()?;
         let condition = self.parse_expression(Precedence::Lowest)?;
-        self.expect_peek(Token::CloseParen)?;
+        self.expect_peek(TokenKind::CloseParen)?;
         self.next_token()?;
         let stmt = self.parse_statement()?;
 
-        let else_stmt = match self.peek_token {
-            Token::KWElse => {
+        let else_stmt = match self.peek_token.kind {
+            TokenKind::KWElse => {
                 self.next_token()?;
                 self.next_token()?;
                 Some(Box::new(self.parse_statement()?))
@@ -560,132 +386,232 @@ impl Parser {
         })
     }
 
-    fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
-        match &self.cur_token {
-            Token::KWInt => {
-                self.next_token()?;
+    // Expressions
 
-                if let Token::Identifier(ident) = self.cur_token.clone() {
-                    self.next_token()?;
-                    match &self.cur_token {
-                        Token::Semicolon => Ok(ast::Declaration {
-                            name: ident,
-                            exp: None,
-                        }),
-                        Token::Assign => {
-                            self.next_token()?;
-                            let expr = self.parse_expression(self.cur_precedence())?;
-                            self.expect_peek(Token::Semicolon)?;
-                            Ok(ast::Declaration {
-                                name: ident,
-                                exp: Some(expr),
-                            })
-                        }
-                        tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
-                            tok.clone(),
-                        )),
+    fn parse_expression(&mut self, precedence: Precedence) -> Result<ast::Expression, ParserError> {
+        let prefix = self
+            .prefix_functions
+            .get(&mem::discriminant(&self.cur_token.kind));
+
+        match prefix {
+            Some(prefix) => {
+                let mut left_exp = prefix(self)?;
+
+                while !self.peek_token_is(TokenKind::Semicolon)
+                    && precedence < self.peek_precedence()
+                {
+                    if self
+                        .infix_functions
+                        .contains_key(&mem::discriminant(&self.peek_token.kind))
+                    {
+                        self.next_token()?;
+                        left_exp = self
+                            .infix_functions
+                            .get(&mem::discriminant(&self.cur_token.kind))
+                            .unwrap()(self, left_exp)?;
+                    } else {
+                        return self.parse_expression_postfix(left_exp);
                     }
-                } else {
-                    Err(ParserError::UnexpectedToken {
-                        expected: Token::Identifier(String::new()),
-                        actual: self.cur_token.clone(),
-                    })
                 }
+
+                self.parse_expression_postfix(left_exp)
             }
-            tok => Err(ParserError::CouldNotParseDeclaration(tok.clone())),
+            None => Err(ParserError::NoPrefixFunction(self.cur_token.kind.clone())),
         }
     }
 
-    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
+    fn parse_expression_postfix(
+        &mut self,
+        mut left_exp: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        while self
+            .postfix_functions
+            .contains_key(&mem::discriminant(&self.peek_token.kind))
+        {
+            self.next_token()?;
+            let postfix = self
+                .postfix_functions
+                .get(&mem::discriminant(&self.cur_token.kind));
+
+            if let Some(postfix) = postfix {
+                left_exp = postfix(self, left_exp)?;
+            }
+        }
+        return Ok(left_exp);
+    }
+
+    fn parse_binary_expression(
+        &mut self,
+        left: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        let bin = match &self.cur_token.kind {
+            TokenKind::Plus => BinaryOperator::Add,
+            TokenKind::Minus => BinaryOperator::Subtract,
+            TokenKind::Asterisk => BinaryOperator::Multiply,
+            TokenKind::Slash => BinaryOperator::Divide,
+            TokenKind::Percent => BinaryOperator::Reminder,
+            TokenKind::ShiftLeft => BinaryOperator::ShiftLeft,
+            TokenKind::ShiftRight => BinaryOperator::ShiftRight,
+            TokenKind::BitwiseAnd => BinaryOperator::BitwiseAnd,
+            TokenKind::Xor => BinaryOperator::Xor,
+            TokenKind::BitwiseOr => BinaryOperator::BitwiseOr,
+            TokenKind::Equal => BinaryOperator::Equal,
+            TokenKind::NotEqual => BinaryOperator::NotEqual,
+            TokenKind::And => BinaryOperator::And,
+            TokenKind::Or => BinaryOperator::Or,
+            TokenKind::LessThan => BinaryOperator::LessThan,
+            TokenKind::LessOrEqual => BinaryOperator::LessOrEqual,
+            TokenKind::GreaterThan => BinaryOperator::GreaterThan,
+            TokenKind::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
+            _ => {
+                unreachable!("Wrong token passed to parse_binary_expression, should not happen. Offending Token: {:?}", &self.cur_token)
+            }
+        };
+
+        let precedence = self.cur_precedence();
         self.next_token()?;
-        match &self.cur_token {
-            Token::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
-            _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
-        }
+        let right = self.parse_expression(precedence)?;
+
+        Ok(ast::Expression::Binary {
+            op: bin,
+            lhs: Box::new(left),
+            rhs: Box::new(right),
+        })
     }
 
-    fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
-        self.expect(Token::KWInt)?;
-        if let Token::Identifier(name) = self.peek_token.clone() {
-            self.next_token()?;
-            self.expect_peek(Token::OpenParen)?;
-            self.expect_peek(Token::KWVoid)?;
-            self.expect_peek(Token::CloseParen)?;
-            self.expect_peek(Token::OpenBrace)?;
+    fn parse_assignment_expression(
+        &mut self,
+        left: ast::Expression,
+    ) -> Result<ast::Expression, ParserError> {
+        let op: ast::AssignmentOperator = match self.cur_token.kind {
+            TokenKind::Assign => ast::AssignmentOperator::None,
+            TokenKind::PlusAssign => ast::AssignmentOperator::Add,
+            TokenKind::MinusAssign => ast::AssignmentOperator::Subtract,
+            TokenKind::AsteriskAssign => ast::AssignmentOperator::Multiply,
+            TokenKind::SlashAssign => ast::AssignmentOperator::Divide,
+            TokenKind::PercentAssign => ast::AssignmentOperator::Reminder,
+            TokenKind::BitwiseAndAssign => ast::AssignmentOperator::BitwiseAnd,
+            TokenKind::BitwiseOrAssign => ast::AssignmentOperator::BitwiseOr,
+            TokenKind::BitwiseXorAssign => ast::AssignmentOperator::BitwiseXor,
+            TokenKind::BitwiseShiftLeftAssign => ast::AssignmentOperator::ShiftLeft,
+            TokenKind::BitwiseShiftRightAssign => ast::AssignmentOperator::ShiftRight,
+            _ => unreachable!(
+                "Wrong token passed to parse_assignment_expression, should not happen."
+            ),
+        };
 
-            let mut body: Vec<BlockItem> = vec![];
-            while !self.peek_token_is(&Token::CloseBrace) {
-                body.push(self.parse_block_item()?);
+        self.next_token()?;
+        let right = self.parse_expression(Precedence::Lowest)?;
+        Ok(ast::Expression::Assignment {
+            op,
+            lhs: Box::new(left),
+            rhs: Box::new(right),
+        })
+    }
+
+    fn parse_conditional(&mut self, left: ast::Expression) -> Result<ast::Expression, ParserError> {
+        self.next_token()?;
+        let then = Box::new(self.parse_expression(Precedence::Lowest)?);
+        self.expect_peek(TokenKind::Colon)?;
+        self.next_token()?;
+        let r#else = Box::new(self.parse_expression(Precedence::Assignment)?);
+        Ok(ast::Expression::Conditional {
+            condition: Box::new(left),
+            then,
+            r#else,
+        })
+    }
+
+    fn parse_constant(&mut self) -> Result<ast::Expression, ParserError> {
+        if let TokenKind::Constant(val) = &self.cur_token.kind {
+            return Ok(ast::Expression::Constant(*val));
+        }
+
+        Err(ParserError::UnexpectedToken {
+            expected: TokenKind::Constant(0),
+            actual: self.cur_token.kind.clone(),
+        })
+    }
+
+    fn parse_identifier(&mut self) -> Result<ast::Expression, ParserError> {
+        if let TokenKind::Identifier(val) = self.cur_token.kind.clone() {
+            return Ok(ast::Expression::Var(val));
+        }
+
+        Err(ParserError::UnexpectedToken {
+            expected: TokenKind::Identifier(String::new()),
+            actual: self.cur_token.kind.clone(),
+        })
+    }
+
+    fn parse_unary(&mut self) -> Result<ast::Expression, ParserError> {
+        match &self.cur_token.kind {
+            TokenKind::Minus => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Negate,
+                    expression: Box::new(expr),
+                })
             }
-            self.next_token()?; // Eat CloseBrace
-
-            Ok(ast::FunctionDefinition {
-                name: name.to_string(),
-                body,
-            })
-        } else {
-            Err(ParserError::UnexpectedToken {
-                expected: Token::Identifier("expected".to_owned()),
-                actual: self.cur_token.clone(),
-            })
+            TokenKind::Tilde => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Complement,
+                    expression: Box::new(expr),
+                })
+            }
+            TokenKind::Not => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Not,
+                    expression: Box::new(expr),
+                })
+            }
+            TokenKind::Increment => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Increment,
+                    expression: Box::new(expr),
+                })
+            }
+            TokenKind::Decrement => {
+                self.next_token()?;
+                let expr = self.parse_expression(Precedence::Prefix)?;
+                Ok(ast::Expression::Unary {
+                    op: ast::UnaryOperator::Decrement,
+                    expression: Box::new(expr),
+                })
+            }
+            _ => unreachable!("Wrong token passed to parse_unary, should not happen."),
         }
     }
 
-    fn next_token(&mut self) -> Result<(), LexerError> {
-        self.cur_token = self.peek_token.clone();
-        self.peek_token = self.lexer.next_token()?;
-
-        Ok(())
-    }
-
-    fn register_prefix(&mut self, token: Discriminant<Token>, func: PrefixFunction) {
-        self.prefix_functions.insert(token, func);
-    }
-
-    fn register_postfix(&mut self, token: Discriminant<Token>, func: PostfixFunction) {
-        self.postfix_functions.insert(token, func);
-    }
-
-    fn register_infix(&mut self, token: Discriminant<Token>, func: InfixFunction) {
-        self.infix_functions.insert(token, func);
-    }
-
-    /// Expects current token to, but does not advance
-    fn expect(&mut self, expected: Token) -> Result<(), ParserError> {
-        if mem::discriminant(&expected) == mem::discriminant(&self.cur_token) {
-            return Ok(());
+    fn parse_postfix(&mut self, lhs: ast::Expression) -> Result<ast::Expression, ParserError> {
+        match &self.cur_token.kind {
+            TokenKind::Increment => Ok(ast::Expression::Postfix(
+                ast::PostfixOperator::Increment,
+                Box::new(lhs),
+            )),
+            TokenKind::Decrement => Ok(ast::Expression::Postfix(
+                ast::PostfixOperator::Decrement,
+                Box::new(lhs),
+            )),
+            _ => unreachable!("Wrong token passed to parse_postfix, should not happen."),
         }
-        Err(ParserError::UnexpectedToken {
-            expected,
-            actual: self.cur_token.clone(),
-        })
     }
 
-    fn expect_peek(&mut self, expected: Token) -> Result<(), ParserError> {
-        if mem::discriminant(&expected) == mem::discriminant(&self.peek_token) {
-            self.next_token()?;
-            return Ok(());
-        }
-        Err(ParserError::UnexpectedToken {
-            expected,
-            actual: self.cur_token.clone(),
-        })
-    }
+    fn parse_grouped_expression(&mut self) -> Result<ast::Expression, ParserError> {
+        self.next_token()?;
 
-    fn peek_token_is(&self, token: &Token) -> bool {
-        mem::discriminant(&self.peek_token) == mem::discriminant(token)
-    }
+        let expr = self.parse_expression(Precedence::Lowest)?;
 
-    //fn cur_token_is(&self, token: &Token) -> bool {
-    //    mem::discriminant(&self.cur_token) == mem::discriminant(token)
-    //}
+        self.expect_peek(TokenKind::CloseParen)?;
 
-    fn peek_precedence(&self) -> Precedence {
-        Precedence::from_token(&self.peek_token).unwrap_or(Precedence::Lowest)
-    }
-
-    fn cur_precedence(&self) -> Precedence {
-        Precedence::from_token(&self.cur_token).unwrap_or(Precedence::Lowest)
+        Ok(expr)
     }
 }
 
@@ -696,7 +622,8 @@ mod tests {
 
     #[test]
     fn test_declaration() {
-        let lexer = Lexer::new("int main(void) { int a = hello; int b; }".to_owned());
+        let input = "int main(void) { int a = hello; int b; }".to_owned();
+        let lexer = Lexer::new(input);
 
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
@@ -719,14 +646,13 @@ mod tests {
 
     #[test]
     fn test_precedence1() {
-        let lexer = Lexer::new(
-            r"
+        let input = r"
         int main(void) {
             return -2 * 2;
         }
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -737,13 +663,13 @@ mod tests {
         assert_eq!(
             program.function_definition.body,
             vec![ast::BlockItem::S(ast::Statement::Return(
-                Expression::Binary {
+                ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary {
+                    lhs: Box::new(ast::Expression::Unary {
                         op: ast::UnaryOperator::Negate,
-                        expression: Box::new(Expression::Constant(2))
+                        expression: Box::new(ast::Expression::Constant(2))
                     },),
-                    rhs: Box::new(Expression::Constant(2))
+                    rhs: Box::new(ast::Expression::Constant(2))
                 }
             ))]
         );
@@ -751,14 +677,13 @@ mod tests {
 
     #[test]
     fn test_precedence2() {
-        let lexer = Lexer::new(
-            r"
+        let input = r#"
         int main(void) {
             return -2 * (~2);
         }
-        "
-            .to_owned(),
-        );
+        "#
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -769,15 +694,15 @@ mod tests {
         assert_eq!(
             program.function_definition.body,
             vec![ast::BlockItem::S(ast::Statement::Return(
-                Expression::Binary {
+                ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary {
+                    lhs: Box::new(ast::Expression::Unary {
                         op: ast::UnaryOperator::Negate,
-                        expression: Box::new(Expression::Constant(2))
+                        expression: Box::new(ast::Expression::Constant(2))
                     },),
-                    rhs: Box::new(Expression::Unary {
+                    rhs: Box::new(ast::Expression::Unary {
                         op: ast::UnaryOperator::Complement,
-                        expression: Box::new(Expression::Constant(2))
+                        expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
             ))]
@@ -786,14 +711,13 @@ mod tests {
 
     #[test]
     fn test_precedence3() {
-        let lexer = Lexer::new(
-            r"
+        let input = r"
         int main(void) {
             return -2 * (~2 * 4);
         }
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -804,19 +728,19 @@ mod tests {
         assert_eq!(
             program.function_definition.body,
             vec![ast::BlockItem::S(ast::Statement::Return(
-                Expression::Binary {
+                ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Unary {
+                    lhs: Box::new(ast::Expression::Unary {
                         op: ast::UnaryOperator::Negate,
-                        expression: Box::new(Expression::Constant(2))
+                        expression: Box::new(ast::Expression::Constant(2))
                     },),
-                    rhs: Box::new(Expression::Binary {
+                    rhs: Box::new(ast::Expression::Binary {
                         op: BinaryOperator::Multiply,
-                        lhs: Box::new(Expression::Unary {
+                        lhs: Box::new(ast::Expression::Unary {
                             op: ast::UnaryOperator::Complement,
-                            expression: Box::new(Expression::Constant(2))
+                            expression: Box::new(ast::Expression::Constant(2))
                         }),
-                        rhs: Box::new(Expression::Constant(4))
+                        rhs: Box::new(ast::Expression::Constant(4))
                     })
                 }
             ))]
@@ -825,14 +749,13 @@ mod tests {
 
     #[test]
     fn test_precedence4() {
-        let lexer = Lexer::new(
-            r"
+        let input = r"
         int main(void) {
             return (3-2) * (~2);
         }
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -843,16 +766,16 @@ mod tests {
         assert_eq!(
             program.function_definition.body,
             vec![ast::BlockItem::S(ast::Statement::Return(
-                Expression::Binary {
+                ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    lhs: Box::new(Expression::Binary {
+                    lhs: Box::new(ast::Expression::Binary {
                         op: BinaryOperator::Subtract,
-                        lhs: Box::new(Expression::Constant(3)),
-                        rhs: Box::new(Expression::Constant(2))
+                        lhs: Box::new(ast::Expression::Constant(3)),
+                        rhs: Box::new(ast::Expression::Constant(2))
                     },),
-                    rhs: Box::new(Expression::Unary {
+                    rhs: Box::new(ast::Expression::Unary {
                         op: ast::UnaryOperator::Complement,
-                        expression: Box::new(Expression::Constant(2))
+                        expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
             ))]
@@ -860,14 +783,13 @@ mod tests {
     }
     #[test]
     fn test_bitwise_prec() {
-        let lexer = Lexer::new(
-            r"
+        let input = r"
         int main(void) {
             return 40 << 4 + 12 >> 1;
         }
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -875,18 +797,18 @@ mod tests {
             .expect("the program should be parsed successfully");
 
         let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
-            Expression::Binary {
+            ast::Expression::Binary {
                 op: BinaryOperator::ShiftRight,
-                lhs: Box::new(Expression::Binary {
+                lhs: Box::new(ast::Expression::Binary {
                     op: BinaryOperator::ShiftLeft,
-                    lhs: Box::new(Expression::Constant(40)),
-                    rhs: Box::new(Expression::Binary {
+                    lhs: Box::new(ast::Expression::Constant(40)),
+                    rhs: Box::new(ast::Expression::Binary {
                         op: BinaryOperator::Add,
-                        lhs: Box::new(Expression::Constant(4)),
-                        rhs: Box::new(Expression::Constant(12)),
+                        lhs: Box::new(ast::Expression::Constant(4)),
+                        rhs: Box::new(ast::Expression::Constant(12)),
                     }),
                 }),
-                rhs: Box::new(Expression::Constant(1)),
+                rhs: Box::new(ast::Expression::Constant(1)),
             },
         ))];
 
@@ -896,14 +818,13 @@ mod tests {
 
     #[test]
     fn test_bitwise_prec2() {
-        let lexer = Lexer::new(
-            r"
+        let input = r"
         int main(void) {
             return 1 << 2 & 3 ^ 2 | 3;
         }
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let lexer = Lexer::new(input);
         let mut parser = Parser::try_build(lexer).expect("parser should be created successfully");
 
         let program = parser
@@ -911,22 +832,22 @@ mod tests {
             .expect("the program should be parsed successfully");
 
         let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
-            Expression::Binary {
+            ast::Expression::Binary {
                 op: BinaryOperator::BitwiseOr,
-                lhs: Box::new(Expression::Binary {
+                lhs: Box::new(ast::Expression::Binary {
                     op: BinaryOperator::Xor,
-                    lhs: Box::new(Expression::Binary {
+                    lhs: Box::new(ast::Expression::Binary {
                         op: BinaryOperator::BitwiseAnd,
-                        lhs: Box::new(Expression::Binary {
+                        lhs: Box::new(ast::Expression::Binary {
                             op: BinaryOperator::ShiftLeft,
-                            lhs: Box::new(Expression::Constant(1)),
-                            rhs: Box::new(Expression::Constant(2)),
+                            lhs: Box::new(ast::Expression::Constant(1)),
+                            rhs: Box::new(ast::Expression::Constant(2)),
                         }),
-                        rhs: Box::new(Expression::Constant(3)),
+                        rhs: Box::new(ast::Expression::Constant(3)),
                     }),
-                    rhs: Box::new(Expression::Constant(2)),
+                    rhs: Box::new(ast::Expression::Constant(2)),
                 }),
-                rhs: Box::new(Expression::Constant(3)),
+                rhs: Box::new(ast::Expression::Constant(3)),
             },
         ))];
 

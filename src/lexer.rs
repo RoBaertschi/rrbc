@@ -1,6 +1,8 @@
+use std::vec::IntoIter;
+
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum LexerError {
     #[error("The character '{0}' could not be represented")]
     UnknownCharacter(char),
@@ -10,8 +12,14 @@ pub enum LexerError {
     IdentifierStartedWithNumber,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Loc {
+    pub line: usize,
+    pub column: usize,
+}
+
 #[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone)]
-pub enum Token {
+pub enum TokenKind {
     Eof,
     Identifier(String),
     Constant(i32),
@@ -72,7 +80,13 @@ pub enum Token {
     KWGoto,
 }
 
-impl Token {
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub loc: Loc,
+}
+
+impl TokenKind {
     pub fn from_string(string: &str) -> Self {
         match string {
             "int" => Self::KWInt,
@@ -88,67 +102,72 @@ impl Token {
 
 #[derive(Debug)]
 pub struct Lexer {
-    input: String,
-    pos: usize,
-    read_pos: usize,
+    _input: String,
+    chars: IntoIter<char>,
+    loc: Loc,
 
-    ch: u8,
+    ch: char,
+    peek_ch: char,
 }
 
 impl Lexer {
     pub fn new(input: String) -> Self {
         let mut lexer = Self {
-            input,
-            pos: 0,
-            read_pos: 0,
-            ch: 0,
+            chars: input.chars().collect::<Vec<_>>().into_iter(),
+            _input: input,
+            ch: '\0',
+            peek_ch: '\0',
+
+            loc: Loc { column: 0, line: 1 },
         };
 
+        lexer.peek_ch = lexer.chars.next().unwrap_or('\0');
         lexer.read_char();
         lexer
     }
 
-    fn peek_char(&self) -> u8 {
-        self.input.as_bytes()[self.read_pos]
+    fn peek_char(&self) -> char {
+        self.peek_ch
     }
 
     fn is_digit(&self) -> bool {
         match self.ch {
-            b'0'..=b'9' => true,
+            '0'..='9' => true,
             _ => false,
         }
     }
 
     fn is_valid_identifier_char(&self) -> bool {
         match self.ch {
-            b'a'..=b'z' => true,
-            b'A'..=b'Z' => true,
-            b'_' => true,
+            'a'..='z' => true,
+            'A'..='Z' => true,
+            '_' => true,
             _ => self.is_digit(),
         }
     }
 
     fn skip_whitespace(&mut self) {
-        while self.ch == b' ' || self.ch == b'\n' || self.ch == b'\r' || self.ch == b'\t' {
+        while self.ch == ' ' || self.ch == '\n' || self.ch == '\r' || self.ch == '\t' {
             self.read_char();
         }
     }
 
     fn read_char(&mut self) {
-        if self.input.len() <= self.read_pos {
-            self.ch = 0;
-        } else {
-            self.ch = self.input.as_bytes()[self.read_pos];
+        if self.ch == '\n' {
+            self.loc.column = 0;
+            self.loc.line += 1;
         }
-
-        self.pos = self.read_pos;
-        self.read_pos += 1;
+        self.ch = self.peek_ch;
+        self.peek_ch = self.chars.next().unwrap_or('\0');
+        self.loc.column += 1;
     }
 
-    fn read_constant(&mut self) -> Result<i32, LexerError> {
-        let old_pos = self.pos;
+    fn read_constant(&mut self) -> Result<Token, LexerError> {
+        let old_loc = self.loc;
+        let mut string = String::new();
 
         while self.is_digit() {
+            string.push(self.ch);
             self.read_char();
         }
 
@@ -156,160 +175,172 @@ impl Lexer {
             return Err(LexerError::IdentifierStartedWithNumber);
         }
 
-        let string = &self.input[old_pos..self.pos];
-
         let num: i32 = string
             .parse()
             .or(Err(LexerError::InvalidNumber(string.to_owned())))?;
 
-        Ok(num)
+        Ok(Token {
+            kind: TokenKind::Constant(num),
+            loc: old_loc,
+        })
     }
 
     fn read_identifier(&mut self) -> Token {
-        let old_pos = self.pos;
+        let old_loc = self.loc;
+        let mut string = String::new();
+
         while self.is_valid_identifier_char() {
+            string.push(self.ch);
             self.read_char();
         }
-
-        let string = &self.input[old_pos..self.pos];
-
-        Token::from_string(string)
+        Token {
+            kind: TokenKind::from_string(&string),
+            loc: old_loc,
+        }
     }
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         self.skip_whitespace();
+
+        let old_loc = self.loc;
+
         let result = match self.ch {
-            b'(' => Token::OpenParen,
-            b')' => Token::CloseParen,
-            b'{' => Token::OpenBrace,
-            b'}' => Token::CloseBrace,
-            b':' => Token::Colon,
-            b'?' => Token::QuestionMark,
-            b';' => Token::Semicolon,
-            b'~' => Token::Tilde,
-            b'+' => match self.peek_char() {
-                b'+' => {
+            '(' => TokenKind::OpenParen,
+            ')' => TokenKind::CloseParen,
+            '{' => TokenKind::OpenBrace,
+            '}' => TokenKind::CloseBrace,
+            ':' => TokenKind::Colon,
+            '?' => TokenKind::QuestionMark,
+            ';' => TokenKind::Semicolon,
+            '~' => TokenKind::Tilde,
+            '+' => match self.peek_char() {
+                '+' => {
                     self.read_char();
-                    Token::Increment
+                    TokenKind::Increment
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::PlusAssign
+                    TokenKind::PlusAssign
                 }
-                _ => Token::Plus,
+                _ => TokenKind::Plus,
             },
-            b'-' => match self.peek_char() {
-                b'-' => {
+            '-' => match self.peek_char() {
+                '-' => {
                     self.read_char();
-                    Token::Decrement
+                    TokenKind::Decrement
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::MinusAssign
+                    TokenKind::MinusAssign
                 }
-                _ => Token::Minus,
+                _ => TokenKind::Minus,
             },
-            b'*' => match self.peek_char() {
-                b'=' => {
+            '*' => match self.peek_char() {
+                '=' => {
                     self.read_char();
-                    Token::AsteriskAssign
+                    TokenKind::AsteriskAssign
                 }
-                _ => Token::Asterisk,
+                _ => TokenKind::Asterisk,
             },
-            b'/' => match self.peek_char() {
-                b'=' => {
+            '/' => match self.peek_char() {
+                '=' => {
                     self.read_char();
-                    Token::SlashAssign
+                    TokenKind::SlashAssign
                 }
-                _ => Token::Slash,
+                _ => TokenKind::Slash,
             },
-            b'%' => match self.peek_char() {
-                b'=' => {
+            '%' => match self.peek_char() {
+                '=' => {
                     self.read_char();
-                    Token::PercentAssign
+                    TokenKind::PercentAssign
                 }
-                _ => Token::Percent,
+                _ => TokenKind::Percent,
             },
-            b'|' => match self.peek_char() {
-                b'|' => {
+            '|' => match self.peek_char() {
+                '|' => {
                     self.read_char();
-                    Token::Or
+                    TokenKind::Or
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::BitwiseOrAssign
+                    TokenKind::BitwiseOrAssign
                 }
-                _ => Token::BitwiseOr,
+                _ => TokenKind::BitwiseOr,
             },
-            b'&' => match self.peek_char() {
-                b'&' => {
+            '&' => match self.peek_char() {
+                '&' => {
                     self.read_char();
-                    Token::And
+                    TokenKind::And
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::BitwiseAndAssign
+                    TokenKind::BitwiseAndAssign
                 }
-                _ => Token::BitwiseAnd,
+                _ => TokenKind::BitwiseAnd,
             },
-            b'^' => match self.peek_char() {
-                b'=' => {
+            '^' => match self.peek_char() {
+                '=' => {
                     self.read_char();
-                    Token::BitwiseXorAssign
+                    TokenKind::BitwiseXorAssign
                 }
-                _ => Token::Xor,
+                _ => TokenKind::Xor,
             },
-            b'!' => match self.peek_char() {
-                b'=' => {
+            '!' => match self.peek_char() {
+                '=' => {
                     self.read_char();
-                    Token::NotEqual
+                    TokenKind::NotEqual
                 }
-                _ => Token::Not,
+                _ => TokenKind::Not,
             },
-            b'<' => match self.peek_char() {
-                b'<' => {
+            '<' => match self.peek_char() {
+                '<' => {
                     self.read_char();
-                    if self.peek_char() == b'=' {
+                    if self.peek_char() == '=' {
                         self.read_char();
-                        Token::BitwiseShiftLeftAssign
+                        TokenKind::BitwiseShiftLeftAssign
                     } else {
-                        Token::ShiftLeft
+                        TokenKind::ShiftLeft
                     }
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::LessOrEqual
+                    TokenKind::LessOrEqual
                 }
-                _ => Token::LessThan,
+                _ => TokenKind::LessThan,
             },
-            b'>' => match self.peek_char() {
-                b'>' => {
+            '>' => match self.peek_char() {
+                '>' => {
                     self.read_char();
-                    if self.peek_char() == b'=' {
+                    if self.peek_char() == '=' {
                         self.read_char();
-                        Token::BitwiseShiftRightAssign
+                        TokenKind::BitwiseShiftRightAssign
                     } else {
-                        Token::ShiftRight
+                        TokenKind::ShiftRight
                     }
                 }
-                b'=' => {
+                '=' => {
                     self.read_char();
-                    Token::GreaterOrEqual
+                    TokenKind::GreaterOrEqual
                 }
-                _ => Token::GreaterThan,
+                _ => TokenKind::GreaterThan,
             },
-            b'=' => {
-                if self.peek_char() == b'=' {
+            '=' => {
+                if self.peek_char() == '=' {
                     self.read_char();
-                    Token::Equal
+                    TokenKind::Equal
                 } else {
-                    Token::Assign
+                    TokenKind::Assign
                 }
             }
-            0 => return Ok(Token::Eof),
+            '\0' => {
+                return Ok(Token {
+                    kind: TokenKind::Eof,
+                    loc: self.loc,
+                })
+            }
             _ => {
                 if self.is_digit() {
-                    return Ok(Token::Constant(self.read_constant()?));
+                    return Ok(self.read_constant()?);
                 } else if self.is_valid_identifier_char() {
                     return Ok(self.read_identifier());
                 }
@@ -319,18 +350,23 @@ impl Lexer {
         };
 
         self.read_char();
-        Ok(result)
+        Ok(Token {
+            kind: result,
+            loc: old_loc,
+        })
     }
 }
 
-impl Iterator for Lexer {
+impl<'a> Iterator for Lexer {
     type Item = Result<Token, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let token = self.next_token();
 
-        if let Ok(Token::Eof) = token {
-            return None;
+        if let Ok(ref tok) = token {
+            if let TokenKind::Eof = tok.kind {
+                return None;
+            }
         }
 
         return Some(token);
@@ -343,70 +379,69 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let mut lexer = Lexer::new(
-            r"
+        let input = r"
             int main(void) {
                 return 2;
             }
-        "
-            .to_owned(),
-        );
+            "
+        .to_owned();
+        let mut lexer = Lexer::new(input);
         let expected: Vec<_> = vec![
-            Token::KWInt,
-            Token::Identifier("main".to_owned()),
-            Token::OpenParen,
-            Token::KWVoid,
-            Token::CloseParen,
-            Token::OpenBrace,
-            Token::KWReturn,
-            Token::Constant(2),
-            Token::Semicolon,
-            Token::CloseBrace,
-            Token::Eof,
+            TokenKind::KWInt,
+            TokenKind::Identifier("main".to_owned()),
+            TokenKind::OpenParen,
+            TokenKind::KWVoid,
+            TokenKind::CloseParen,
+            TokenKind::OpenBrace,
+            TokenKind::KWReturn,
+            TokenKind::Constant(2),
+            TokenKind::Semicolon,
+            TokenKind::CloseBrace,
+            TokenKind::Eof,
         ];
 
         for expected_token in expected {
             let token = lexer.next_token().expect("should return token");
 
-            assert_eq!(expected_token, token);
+            assert_eq!(expected_token, token.kind);
         }
     }
 
     #[test]
     fn test_all_compound_assignment() {
-        let mut lexer = Lexer::new(
-            r"
+        let input = r"
         += -= *= /= %= &= |= ^= <<= >>= ++ --
         "
-            .to_owned(),
-        );
+        .to_owned();
+        let mut lexer = Lexer::new(input);
 
         let expected: Vec<_> = vec![
-            Token::PlusAssign,
-            Token::MinusAssign,
-            Token::AsteriskAssign,
-            Token::SlashAssign,
-            Token::PercentAssign,
-            Token::BitwiseAndAssign,
-            Token::BitwiseOrAssign,
-            Token::BitwiseXorAssign,
-            Token::BitwiseShiftLeftAssign,
-            Token::BitwiseShiftRightAssign,
-            Token::Increment,
-            Token::Decrement,
+            TokenKind::PlusAssign,
+            TokenKind::MinusAssign,
+            TokenKind::AsteriskAssign,
+            TokenKind::SlashAssign,
+            TokenKind::PercentAssign,
+            TokenKind::BitwiseAndAssign,
+            TokenKind::BitwiseOrAssign,
+            TokenKind::BitwiseXorAssign,
+            TokenKind::BitwiseShiftLeftAssign,
+            TokenKind::BitwiseShiftRightAssign,
+            TokenKind::Increment,
+            TokenKind::Decrement,
         ];
 
         for expected_token in expected {
             let token = lexer.next_token().expect("should return token");
 
-            assert_eq!(expected_token, token);
+            assert_eq!(expected_token, token.kind);
         }
     }
 
     #[test]
     #[should_panic]
     fn test_backslash() {
-        let mut lexer = Lexer::new("\\".to_owned());
+        let input = "\\".to_owned();
+        let mut lexer = Lexer::new(input);
 
         let token = lexer.next_token().expect("Should fail");
 
