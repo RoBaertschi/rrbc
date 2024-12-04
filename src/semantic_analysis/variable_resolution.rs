@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{BlockItem, Declaration, Expression, Program, Statement, UnaryOperator},
+    ast::{Block, BlockItem, Declaration, Expression, Program, Statement, UnaryOperator},
     unique_id,
 };
 
@@ -19,20 +19,34 @@ pub enum VariableResolutionError {
     InvalidLvalue(Expression),
 }
 
-type VariableMap = HashMap<String, String>;
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+struct VariableMapEntry {
+    new_name: String,
+    from_current_block: bool,
+}
+type VariableMap = HashMap<String, VariableMapEntry>;
+
+fn copy_variable_map(variable_map: &VariableMap) -> VariableMap {
+    // Expensive but necessary
+    let mut new_variable_map = variable_map.clone();
+    for map_entry in new_variable_map.iter_mut() {
+        map_entry.1.from_current_block = false;
+    }
+    new_variable_map
+}
 
 pub fn resolve_program(program: Program) -> Result<Program, VariableResolutionError> {
     let mut map = VariableMap::new();
 
     let mut blocks = vec![];
-    for item in program.function_definition.body {
+    for item in program.function_definition.body.0 {
         blocks.push(resolve_block_item(&mut map, item)?);
     }
 
     Ok(Program {
         function_definition: crate::ast::FunctionDefinition {
             name: program.function_definition.name,
-            body: blocks,
+            body: Block(blocks),
         },
     })
 }

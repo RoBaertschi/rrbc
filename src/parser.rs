@@ -254,15 +254,11 @@ impl Parser {
             self.expect_peek(TokenKind::CloseParen)?;
             self.expect_peek(TokenKind::OpenBrace)?;
 
-            let mut body: Vec<ast::BlockItem> = vec![];
-            while !self.peek_token_is(TokenKind::CloseBrace) {
-                body.push(self.parse_block_item()?);
-            }
-            self.next_token()?; // Eat CloseBrace
+            let block = self.parse_block()?;
 
             Ok(ast::FunctionDefinition {
                 name: name.to_string(),
-                body,
+                body: block,
             })
         } else {
             Err(ParserError::UnexpectedToken {
@@ -273,11 +269,22 @@ impl Parser {
     }
 
     fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
-        self.next_token()?;
         match &self.cur_token.kind {
             TokenKind::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
             _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
         }
+    }
+
+    fn parse_block(&mut self) -> Result<ast::Block, ParserError> {
+        let mut body: Vec<ast::BlockItem> = vec![];
+        while !self.peek_token_is(TokenKind::CloseBrace) {
+            self.next_token()?;
+            body.push(self.parse_block_item()?);
+        }
+        self.next_token()?; // Eat CloseBrace
+                            // }
+                            // ^
+        Ok(ast::Block(body))
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
@@ -319,6 +326,7 @@ impl Parser {
             TokenKind::KWIf => self.parse_if_statement(),
             TokenKind::KWGoto => self.parse_goto_statement(),
             TokenKind::Semicolon => Ok(ast::Statement::Null),
+            TokenKind::OpenBrace => self.parse_compound_statement(),
             TokenKind::Identifier(ident) if self.peek_token_is(TokenKind::Colon) => {
                 self.parse_label_statement(ident.clone())
             }
@@ -360,6 +368,11 @@ impl Parser {
             identifier,
             Box::new(self.parse_statement()?),
         ))
+    }
+
+    fn parse_compound_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        let block = self.parse_block()?;
+        Ok(ast::Statement::Compound(block))
     }
 
     fn parse_if_statement(&mut self) -> Result<ast::Statement, ParserError> {
