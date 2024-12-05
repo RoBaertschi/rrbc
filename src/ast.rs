@@ -154,6 +154,7 @@ pub enum Statement {
     Null,
     Goto(Identifier),
     Label(Identifier, Box<Statement>),
+    Compound(Block),
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -168,10 +169,13 @@ pub enum BlockItem {
     D(Declaration),
 }
 
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Block(pub Vec<BlockItem>);
+
 #[derive(Debug)]
 pub struct FunctionDefinition {
     pub name: Identifier,
-    pub body: Vec<BlockItem>,
+    pub body: Block,
 }
 
 #[derive(Debug)]
