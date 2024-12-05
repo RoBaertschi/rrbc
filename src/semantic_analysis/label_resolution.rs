@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{BlockItem, FunctionDefinition, Program, Statement},
+    ast::{Block, BlockItem, FunctionDefinition, Program, Statement},
     unique_id,
 };
 
@@ -36,20 +36,32 @@ pub fn resolve_function(
         function_name: function.name,
     };
 
-    let mut find_label_blocks = vec![];
-    for item in function.body {
-        find_label_blocks.push(find_label_resolve_block_item(&mut state, item)?);
-    }
-
-    let mut blocks = vec![];
-    for item in find_label_blocks {
-        blocks.push(resolve_block_item(&mut state, item)?);
-    }
+    let mut body = find_label_resolve_block(&mut state, function.body)?;
+    body = resolve_block(&mut state, body)?;
 
     Ok(FunctionDefinition {
         name: state.function_name,
-        body: blocks,
+        body,
     })
+}
+
+fn resolve_block(state: &mut State, block: Block) -> Result<Block, LabelResolutionError> {
+    let mut blocks = vec![];
+    for item in block.0 {
+        blocks.push(resolve_block_item(state, item)?);
+    }
+    Ok(Block(blocks))
+}
+
+fn find_label_resolve_block(
+    state: &mut State,
+    block: Block,
+) -> Result<Block, LabelResolutionError> {
+    let mut blocks = vec![];
+    for item in block.0 {
+        blocks.push(find_label_resolve_block_item(state, item)?);
+    }
+    Ok(Block(blocks))
 }
 
 fn find_label_resolve_block_item(
@@ -97,6 +109,9 @@ fn find_label_resolve_statement(
         Statement::Null => Ok(Statement::Null),
         // Later
         Statement::Goto(name) => Ok(Statement::Goto(name)),
+        Statement::Compound(block) => {
+            Ok(Statement::Compound(find_label_resolve_block(state, block)?))
+        }
     }
 }
 
@@ -147,5 +162,6 @@ fn resolve_statement(
             name,
             Box::new(resolve_statement(state, *stmt)?),
         )),
+        Statement::Compound(block) => Ok(Statement::Compound(resolve_block(state, block)?)),
     }
 }

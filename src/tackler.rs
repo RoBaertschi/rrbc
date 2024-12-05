@@ -246,7 +246,16 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             instructions.append(&mut emit_tacky_statement(*stmt));
             instructions
         }
+        ast::Statement::Compound(block) => emit_tacky_block(block),
     }
+}
+
+pub fn emit_tacky_block(block: ast::Block) -> Vec<Instruction> {
+    let mut instructions = vec![];
+    for item in block.0 {
+        instructions.append(&mut emit_tacky_block_item(item));
+    }
+    instructions
 }
 
 pub fn emit_tacky_declaration(declaration: ast::Declaration) -> Vec<Instruction> {
@@ -272,9 +281,7 @@ pub fn emit_tacky_block_item(block_item: ast::BlockItem) -> Vec<Instruction> {
 pub fn emit_tacky_function(func: ast::FunctionDefinition) -> FunctionDefiniton {
     let mut body = vec![];
 
-    for stmt in func.body {
-        body.append(&mut emit_tacky_block_item(stmt));
-    }
+    body.append(&mut emit_tacky_block(func.body));
 
     body.append(&mut vec![Instruction::Return(Value::Constant(0))]);
 

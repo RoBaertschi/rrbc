@@ -36,22 +36,29 @@ fn copy_variable_map(variable_map: &VariableMap) -> VariableMap {
 }
 
 pub fn resolve_program(program: Program) -> Result<Program, VariableResolutionError> {
-    let mut map = VariableMap::new();
-
-    let mut blocks = vec![];
-    for item in program.function_definition.body.0 {
-        blocks.push(resolve_block_item(&mut map, item)?);
-    }
+    let mut variable_map = VariableMap::new();
 
     Ok(Program {
         function_definition: crate::ast::FunctionDefinition {
             name: program.function_definition.name,
-            body: Block(blocks),
+            body: resolve_block(&mut variable_map, program.function_definition.body)?,
         },
     })
 }
 
-pub fn resolve_block_item(
+fn resolve_block(
+    variable_map: &mut VariableMap,
+    block: Block,
+) -> Result<Block, VariableResolutionError> {
+    let mut blocks = vec![];
+    for item in block.0 {
+        blocks.push(resolve_block_item(variable_map, item)?);
+    }
+
+    Ok(Block(blocks))
+}
+
+fn resolve_block_item(
     variable_map: &mut VariableMap,
     block_item: BlockItem,
 ) -> Result<BlockItem, VariableResolutionError> {
@@ -61,18 +68,26 @@ pub fn resolve_block_item(
     })
 }
 
-pub fn resolve_declaration(
+fn resolve_declaration(
     variable_map: &mut VariableMap,
     decl: Declaration,
 ) -> Result<Declaration, VariableResolutionError> {
-    if variable_map.contains_key(&decl.name) {
-        return Err(VariableResolutionError::VariableNameRedeclaration(
-            decl.name,
-        ));
+    if let Some(entry) = variable_map.get(&decl.name) {
+        if entry.from_current_block {
+            return Err(VariableResolutionError::VariableNameRedeclaration(
+                decl.name,
+            ));
+        }
     }
 
     let unique_name = unique_id::temp_c_variable_name(&decl.name);
-    variable_map.insert(decl.name, unique_name.clone());
+    variable_map.insert(
+        decl.name,
+        VariableMapEntry {
+            new_name: unique_name.clone(),
+            from_current_block: true,
+        },
+    );
 
     let expr = if let Some(expr) = decl.exp {
         Some(resolve_expression(variable_map, expr)?)
@@ -86,7 +101,7 @@ pub fn resolve_declaration(
     })
 }
 
-pub fn resolve_statement(
+fn resolve_statement(
     variable_map: &mut VariableMap,
     stmt: Statement,
 ) -> Result<Statement, VariableResolutionError> {
@@ -115,10 +130,14 @@ pub fn resolve_statement(
         Statement::Label(ident, stmt) => {
             Statement::Label(ident, Box::new(resolve_statement(variable_map, *stmt)?))
         }
+        Statement::Compound(block) => {
+            let mut new_variable_map = copy_variable_map(variable_map);
+            Statement::Compound(resolve_block(&mut new_variable_map, block)?)
+        }
     })
 }
 
-pub fn resolve_variable(
+fn resolve_variable(
     variable_map: &mut VariableMap,
     expr: Expression,
 ) -> Result<Expression, VariableResolutionError> {
@@ -127,6 +146,7 @@ pub fn resolve_variable(
             variable_map
                 .get(&name)
                 .ok_or(VariableResolutionError::VariableNameNotFound(name))?
+                .new_name
                 .clone(),
         )),
 
@@ -134,13 +154,13 @@ pub fn resolve_variable(
     }
 }
 
-pub fn resolve_expression(
+fn resolve_expression(
     variable_map: &mut VariableMap,
     expr: Expression,
 ) -> Result<Expression, VariableResolutionError> {
     Ok(match expr {
         Expression::Var(name) => match variable_map.get(&name) {
-            Some(unique_name) => Expression::Var(unique_name.clone()),
+            Some(entry) => Expression::Var(entry.new_name.clone()),
             None => return Err(VariableResolutionError::VariableNameNotFound(name)),
         },
         Expression::Assignment { lhs, rhs, op } => Expression::Assignment {
