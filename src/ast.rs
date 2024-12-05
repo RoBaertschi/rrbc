@@ -151,10 +151,32 @@ pub enum Statement {
         then: Box<Statement>,
         r#else: Option<Box<Statement>>,
     },
-    Null,
     Goto(Identifier),
     Label(Identifier, Box<Statement>),
     Compound(Block),
+    Break,
+    Continue,
+    While {
+        condition: Expression,
+        body: Box<Statement>,
+    },
+    DoWhile {
+        body: Box<Statement>,
+        condition: Expression,
+    },
+    For {
+        init: ForInit,
+        condition: Option<Expression>,
+        post: Option<Expression>,
+        body: Box<Expression>,
+    },
+    Null,
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum ForInit {
+    InitDecl(Declaration),
+    InitExp(Expression),
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
