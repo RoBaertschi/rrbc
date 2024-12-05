@@ -5,8 +5,13 @@ int main(void) {
     b = 3;
     a = 4;
 
-    if (a)
-        return b;
-    else
-        return a;
+    loop1:
+    if (a >= 20) {
+        goto end;
+    } else {
+        a++;
+        goto loop1;
+    }
+    end:
+    return a;
 }
