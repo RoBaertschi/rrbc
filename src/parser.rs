@@ -227,6 +227,10 @@ impl Parser {
         mem::discriminant(&self.peek_token.kind) == mem::discriminant(&token)
     }
 
+    fn cur_token_is(&self, token: TokenKind) -> bool {
+        mem::discriminant(&self.cur_token.kind) == mem::discriminant(&token)
+    }
+
     fn peek_precedence(&self) -> Precedence {
         Precedence::from_token(&self.peek_token.kind).unwrap_or(Precedence::Lowest)
     }
@@ -322,6 +326,8 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match &self.cur_token.kind {
+            TokenKind::KWBreak => self.parse_break_statement(),
+            TokenKind::KWContinue => self.parse_continue_statement(),
             TokenKind::KWReturn => self.parse_return_statement(),
             TokenKind::KWIf => self.parse_if_statement(),
             TokenKind::KWGoto => self.parse_goto_statement(),
@@ -336,6 +342,82 @@ impl Parser {
                 Ok(ast::Statement::Expression(expr))
             }
         }
+    }
+
+    fn parse_while_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        Ok(ast::Statement::While {
+            condition: expr,
+            body: Box::new(stmt),
+            label: String::new(),
+        })
+    }
+
+    fn parse_do_while_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        self.expect_peek(TokenKind::KWWhile)?;
+        self.expect_peek(TokenKind::OpenParen)?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.expect_peek(TokenKind::Semicolon)?;
+        Ok(ast::Statement::DoWhile {
+            body: Box::new(stmt),
+            condition: expr,
+            label: String::new(),
+        })
+    }
+
+    fn parse_for_init(&mut self) -> Result<ast::ForInit, ParserError> {
+        match self.cur_token.kind {
+            TokenKind::Semicolon => Ok(ast::ForInit::None),
+            TokenKind::KWInt => {
+                let decl = self.parse_declaration()?;
+                self.expect_peek(TokenKind::Semicolon)?;
+                Ok(ast::ForInit::InitDecl(decl))
+            }
+            _ => {
+                let expr = self.parse_expression(Precedence::Lowest)?;
+                self.expect_peek(TokenKind::Semicolon);
+                Ok(ast::ForInit::InitExp(expr))
+            }
+        }
+    }
+
+    fn parse_for_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let init = self.parse_for_init()?;
+        self.next_token()?;
+        let optional_condition = self.parse_optional_expression(TokenKind::Semicolon)?;
+        self.next_token()?;
+        let optional_end = self.parse_optional_expression(TokenKind::CloseParen)?;
+
+        self.next_token()?;
+
+        let body = Box::new(self.parse_statement()?);
+
+        Ok(ast::Statement::For {
+            init,
+            condition: optional_condition,
+            post: optional_end,
+            body,
+            label: String::new(),
+        })
+    }
+
+    fn parse_break_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Semicolon);
+        Ok(ast::Statement::Break(String::new()))
+    }
+
+    fn parse_continue_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Semicolon);
+        Ok(ast::Statement::Continue(String::new()))
     }
 
     fn parse_return_statement(&mut self) -> Result<ast::Statement, ParserError> {
@@ -430,6 +512,19 @@ impl Parser {
                 self.parse_expression_postfix(left_exp)
             }
             None => Err(ParserError::NoPrefixFunction(self.cur_token.kind.clone())),
+        }
+    }
+
+    fn parse_optional_expression(
+        &mut self,
+        end: TokenKind,
+    ) -> Result<Option<ast::Expression>, ParserError> {
+        if self.cur_token_is(end.clone()) {
+            Ok(None)
+        } else {
+            let expr = self.parse_expression(Precedence::Lowest)?;
+            self.expect_peek(end)?;
+            Ok(Some(expr))
         }
     }
 

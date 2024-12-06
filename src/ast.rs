@@ -154,21 +154,24 @@ pub enum Statement {
     Goto(Identifier),
     Label(Identifier, Box<Statement>),
     Compound(Block),
-    Break,
-    Continue,
+    Break(Identifier),
+    Continue(Identifier),
     While {
         condition: Expression,
         body: Box<Statement>,
+        label: Identifier,
     },
     DoWhile {
         body: Box<Statement>,
         condition: Expression,
+        label: Identifier,
     },
     For {
         init: ForInit,
         condition: Option<Expression>,
         post: Option<Expression>,
-        body: Box<Expression>,
+        body: Box<Statement>,
+        label: Identifier,
     },
     Null,
 }
@@ -177,6 +180,7 @@ pub enum Statement {
 pub enum ForInit {
     InitDecl(Declaration),
     InitExp(Expression),
+    None,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
