@@ -218,7 +218,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected,
-                actual: self.cur_token.kind.clone(),
+                actual: self.peek_token.kind.clone(),
             })
         }
     }
@@ -291,6 +291,7 @@ impl Parser {
         Ok(ast::Block(body))
     }
 
+    // WARN: This will parse a semicolon!
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
         self.next_token()?;
 
@@ -328,9 +329,13 @@ impl Parser {
         match &self.cur_token.kind {
             TokenKind::KWBreak => self.parse_break_statement(),
             TokenKind::KWContinue => self.parse_continue_statement(),
+            TokenKind::KWDo => self.parse_do_while_statement(),
+            TokenKind::KWFor => self.parse_for_statement(),
             TokenKind::KWReturn => self.parse_return_statement(),
             TokenKind::KWIf => self.parse_if_statement(),
             TokenKind::KWGoto => self.parse_goto_statement(),
+            TokenKind::KWWhile => self.parse_while_statement(),
+
             TokenKind::Semicolon => Ok(ast::Statement::Null),
             TokenKind::OpenBrace => self.parse_compound_statement(),
             TokenKind::Identifier(ident) if self.peek_token_is(TokenKind::Colon) => {
@@ -346,6 +351,7 @@ impl Parser {
 
     fn parse_while_statement(&mut self) -> Result<ast::Statement, ParserError> {
         self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
         let expr = self.parse_expression(Precedence::Lowest)?;
         self.expect_peek(TokenKind::CloseParen)?;
         self.next_token()?;
@@ -362,6 +368,7 @@ impl Parser {
         let stmt = self.parse_statement()?;
         self.expect_peek(TokenKind::KWWhile)?;
         self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
         let expr = self.parse_expression(Precedence::Lowest)?;
         self.expect_peek(TokenKind::CloseParen)?;
         self.expect_peek(TokenKind::Semicolon)?;
@@ -377,12 +384,11 @@ impl Parser {
             TokenKind::Semicolon => Ok(ast::ForInit::None),
             TokenKind::KWInt => {
                 let decl = self.parse_declaration()?;
-                self.expect_peek(TokenKind::Semicolon)?;
                 Ok(ast::ForInit::InitDecl(decl))
             }
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
-                self.expect_peek(TokenKind::Semicolon);
+                self.expect_peek(TokenKind::Semicolon)?;
                 Ok(ast::ForInit::InitExp(expr))
             }
         }
@@ -411,12 +417,12 @@ impl Parser {
     }
 
     fn parse_break_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(TokenKind::Semicolon);
+        self.expect_peek(TokenKind::Semicolon)?;
         Ok(ast::Statement::Break(String::new()))
     }
 
     fn parse_continue_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        self.expect_peek(TokenKind::Semicolon);
+        self.expect_peek(TokenKind::Semicolon)?;
         Ok(ast::Statement::Continue(String::new()))
     }
 

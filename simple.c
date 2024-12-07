@@ -13,5 +13,10 @@ int main(void) {
         goto loop1;
     }
     end:
+
+    for (int i = 0; i < 10; i++) {
+    
+    }
+
     return a;
 }

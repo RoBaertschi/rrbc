@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, Declaration, Expression, Program, Statement, UnaryOperator},
+    ast::{Block, BlockItem, Declaration, Expression, ForInit, Program, Statement, UnaryOperator},
     unique_id,
 };
 
@@ -134,7 +134,70 @@ fn resolve_statement(
             let mut new_variable_map = copy_variable_map(variable_map);
             Statement::Compound(resolve_block(&mut new_variable_map, block)?)
         }
+        Statement::Break(label) => Statement::Break(label),
+        Statement::Continue(label) => Statement::Continue(label),
+        Statement::While {
+            condition,
+            body,
+            label,
+        } => Statement::While {
+            condition: resolve_expression(variable_map, condition)?,
+            body: Box::new(resolve_statement(variable_map, *body)?),
+            label,
+        },
+        Statement::DoWhile {
+            body,
+            condition,
+            label,
+        } => Statement::DoWhile {
+            condition: resolve_expression(variable_map, condition)?,
+            body: Box::new(resolve_statement(variable_map, *body)?),
+            label,
+        },
+        Statement::For {
+            init,
+            condition,
+            post,
+            body,
+            label,
+        } => {
+            let mut new_variable_map = copy_variable_map(variable_map);
+            Statement::For {
+                init: resolve_for_init(&mut new_variable_map, init)?,
+                condition: resolve_optional_expression(&mut new_variable_map, condition)?,
+                post: resolve_optional_expression(&mut new_variable_map, post)?,
+                body: Box::new(resolve_statement(&mut new_variable_map, *body)?),
+                label,
+            }
+        }
     })
+}
+
+fn resolve_optional_expression(
+    variable_map: &mut VariableMap,
+    expr: Option<Expression>,
+) -> Result<Option<Expression>, VariableResolutionError> {
+    match expr {
+        Some(expr) => Ok(Some(resolve_expression(variable_map, expr)?)),
+        None => Ok(None),
+    }
+}
+
+fn resolve_for_init(
+    variable_map: &mut VariableMap,
+    init: ForInit,
+) -> Result<ForInit, VariableResolutionError> {
+    match init {
+        ForInit::InitDecl(declaration) => Ok(ForInit::InitDecl(resolve_declaration(
+            variable_map,
+            declaration,
+        )?)),
+        ForInit::InitExp(expression) => Ok(ForInit::InitExp(resolve_expression(
+            variable_map,
+            expression,
+        )?)),
+        ForInit::None => Ok(ForInit::None),
+    }
 }
 
 fn resolve_variable(
