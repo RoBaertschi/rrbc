@@ -8,7 +8,7 @@ pub fn temp_variable_name() -> String {
     )
 }
 
-pub fn temp_lable_name(action: &str) -> String {
+pub fn temp_label_name(action: &str) -> String {
     static ID: AtomicU64 = AtomicU64::new(0);
     format!(
         "tmp.{action}{}",
