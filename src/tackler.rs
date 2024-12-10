@@ -247,6 +247,77 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             instructions
         }
         ast::Statement::Compound(block) => emit_tacky_block(block),
+        ast::Statement::Break(label) => vec![Instruction::Jump(format!("{label}_break"))],
+        ast::Statement::Continue(label) => vec![Instruction::Jump(format!("{label}_continue"))],
+        ast::Statement::While {
+            condition,
+            body,
+            label,
+        } => {
+            let start = format!("{label}_continue");
+            let end = format!("{label}_break");
+            let mut instructions = vec![Instruction::Label(start.clone())];
+            let (mut condition_instructions, condition_value) = emit_tacky_expression(condition);
+            instructions.append(&mut condition_instructions);
+            instructions.push(Instruction::JumpIfZero(condition_value, end.clone()));
+            instructions.append(&mut emit_tacky_statement(*body));
+            instructions.push(Instruction::Jump(start));
+            instructions.push(Instruction::Label(end));
+            instructions
+        }
+        ast::Statement::DoWhile {
+            body,
+            condition,
+            label,
+        } => {
+            let start = unique_id::temp_label_name("do_while_start");
+            let mut instructions = vec![Instruction::Label(start.clone())];
+            instructions.append(&mut emit_tacky_statement(*body));
+            instructions.push(Instruction::Label(format!("{label}_continue")));
+            let (mut condition_instructions, condition_value) = emit_tacky_expression(condition);
+            instructions.append(&mut condition_instructions);
+            instructions.push(Instruction::JumpIfNotZero(condition_value, start));
+            instructions.push(Instruction::Label(format!("{label}_break")));
+            instructions
+        }
+        ast::Statement::For {
+            init,
+            condition,
+            post,
+            body,
+            label,
+        } => {
+            let start = unique_id::temp_label_name("for_start");
+            let continue_label = format!("{label}_continue");
+            let break_label = format!("{label}_break");
+            let mut instructions = emit_tacky_for_init(init);
+            instructions.push(Instruction::Label(start.clone()));
+            if let Some(condition) = condition {
+                let (mut condition_instructions, condition_value) =
+                    emit_tacky_expression(condition);
+                instructions.append(&mut condition_instructions);
+                instructions.push(Instruction::JumpIfZero(
+                    condition_value,
+                    break_label.clone(),
+                ));
+            }
+            instructions.append(&mut emit_tacky_statement(*body));
+            instructions.push(Instruction::Label(continue_label));
+            if let Some(post) = post {
+                instructions.append(&mut emit_tacky_expression(post).0);
+            }
+            instructions.push(Instruction::Jump(start));
+            instructions.push(Instruction::Label(break_label));
+            instructions
+        }
+    }
+}
+
+pub fn emit_tacky_for_init(for_init: ast::ForInit) -> Vec<Instruction> {
+    match for_init {
+        ast::ForInit::InitDecl(decl) => emit_tacky_declaration(decl),
+        ast::ForInit::InitExp(expr) => emit_tacky_expression(expr).0,
+        ast::ForInit::None => vec![],
     }
 }
 

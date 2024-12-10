@@ -31,3 +31,11 @@ pub fn temp_c_label_name(label_name: &str, function_name: &str) -> String {
         ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     )
 }
+
+pub fn temp_loop_label(loop_type: &str) -> String {
+    static ID: AtomicU64 = AtomicU64::new(0);
+    format!(
+        "loop_label.{loop_type}.{}",
+        ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    )
+}
