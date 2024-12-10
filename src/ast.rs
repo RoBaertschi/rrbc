@@ -162,23 +162,24 @@ pub enum Statement {
     While {
         condition: Expression,
         body: Box<Statement>,
-        label: Identifier,
+        label: Option<Identifier>,
     },
     DoWhile {
         body: Box<Statement>,
         condition: Expression,
-        label: Identifier,
+        label: Option<Identifier>,
     },
     For {
         init: ForInit,
         condition: Option<Expression>,
         post: Option<Expression>,
         body: Box<Statement>,
-        label: Identifier,
+        label: Option<Identifier>,
     },
     Switch {
         expression: Expression,
         body: Box<Statement>,
+        label: Option<Identifier>,
         /// This data will only be populated after the coresspondig pass is done. So only use this
         /// in the that specific pass or in tacky generation.
         data: Option<ResolvedSwitchData>,
@@ -189,9 +190,9 @@ pub enum Statement {
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ResolvedSwitchData {
     /// Each case with a value
-    cases: Vec<i32>,
+    pub cases: Vec<i32>,
     /// Does this switch have a default case?
-    has_default: bool,
+    pub has_default: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]

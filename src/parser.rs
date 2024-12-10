@@ -362,7 +362,7 @@ impl Parser {
         Ok(ast::Statement::While {
             condition: expr,
             body: Box::new(stmt),
-            label: String::new(),
+            label: None,
         })
     }
 
@@ -378,7 +378,7 @@ impl Parser {
         Ok(ast::Statement::DoWhile {
             body: Box::new(stmt),
             condition: expr,
-            label: String::new(),
+            label: None,
         })
     }
 
@@ -415,7 +415,7 @@ impl Parser {
             condition: optional_condition,
             post: optional_end,
             body,
-            label: String::new(),
+            label: None,
         })
     }
 
@@ -430,6 +430,7 @@ impl Parser {
             expression: expr,
             body: Box::new(stmt),
             data: None,
+            label: None,
         })
     }
 
@@ -783,7 +784,7 @@ mod tests {
 
         assert_eq!(
             program.function_definition.body,
-            vec![
+            ast::Block(vec![
                 ast::BlockItem::D(ast::Declaration {
                     name: "a".to_owned(),
                     exp: Some(ast::Expression::Var("hello".to_owned()))
@@ -792,7 +793,7 @@ mod tests {
                     name: "b".to_owned(),
                     exp: None,
                 }),
-            ]
+            ])
         );
     }
 
@@ -814,7 +815,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -823,7 +824,7 @@ mod tests {
                     },),
                     rhs: Box::new(ast::Expression::Constant(2))
                 }
-            ))]
+            ))])
         );
     }
 
@@ -845,7 +846,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -857,7 +858,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))]
+            ))])
         );
     }
 
@@ -879,7 +880,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -895,7 +896,7 @@ mod tests {
                         rhs: Box::new(ast::Expression::Constant(4))
                     })
                 }
-            ))]
+            ))])
         );
     }
 
@@ -917,7 +918,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Binary {
@@ -930,7 +931,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))]
+            ))])
         );
     }
     #[test]
@@ -948,7 +949,7 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+        let expected_result = ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
             ast::Expression::Binary {
                 op: BinaryOperator::ShiftRight,
                 lhs: Box::new(ast::Expression::Binary {
@@ -962,7 +963,7 @@ mod tests {
                 }),
                 rhs: Box::new(ast::Expression::Constant(1)),
             },
-        ))];
+        ))]);
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
@@ -983,7 +984,7 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+        let expected_result = ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
             ast::Expression::Binary {
                 op: BinaryOperator::BitwiseOr,
                 lhs: Box::new(ast::Expression::Binary {
@@ -1001,7 +1002,7 @@ mod tests {
                 }),
                 rhs: Box::new(ast::Expression::Constant(3)),
             },
-        ))];
+        ))]);
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
