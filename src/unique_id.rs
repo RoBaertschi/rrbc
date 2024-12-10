@@ -39,3 +39,10 @@ pub fn temp_loop_label(loop_type: &str) -> String {
         ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     )
 }
+pub fn temp_switch_label() -> String {
+    static ID: AtomicU64 = AtomicU64::new(0);
+    format!(
+        "switch_label.{}",
+        ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    )
+}

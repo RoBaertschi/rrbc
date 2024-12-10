@@ -73,7 +73,9 @@ pub enum TokenKind {
 
     // Keywords
     KWBreak,
+    KWCase,
     KWContinue,
+    KWDefault,
     KWDo,
     KWElse,
     KWFor,
@@ -81,6 +83,7 @@ pub enum TokenKind {
     KWIf,
     KWInt,
     KWReturn,
+    KWSwitch,
     KWVoid,
     KWWhile,
 }
@@ -95,7 +98,9 @@ impl TokenKind {
     pub fn from_string(string: &str) -> Self {
         match string {
             "break" => Self::KWBreak,
+            "case" => Self::KWCase,
             "continue" => Self::KWContinue,
+            "default" => Self::KWDefault,
             "do" => Self::KWDo,
             "else" => Self::KWElse,
             "for" => Self::KWFor,
@@ -103,6 +108,7 @@ impl TokenKind {
             "if" => Self::KWIf,
             "int" => Self::KWInt,
             "return" => Self::KWReturn,
+            "switch" => Self::KWSwitch,
             "void" => Self::KWVoid,
             "while" => Self::KWWhile,
             _ => Self::Identifier(string.to_owned()),

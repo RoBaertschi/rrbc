@@ -328,10 +328,13 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match &self.cur_token.kind {
             TokenKind::KWBreak => self.parse_break_statement(),
+            TokenKind::KWCase => self.parse_case_statement(),
+            TokenKind::KWDefault => self.parse_default_case_statement(),
             TokenKind::KWContinue => self.parse_continue_statement(),
             TokenKind::KWDo => self.parse_do_while_statement(),
             TokenKind::KWFor => self.parse_for_statement(),
             TokenKind::KWReturn => self.parse_return_statement(),
+            TokenKind::KWSwitch => self.parse_switch_statement(),
             TokenKind::KWIf => self.parse_if_statement(),
             TokenKind::KWGoto => self.parse_goto_statement(),
             TokenKind::KWWhile => self.parse_while_statement(),
@@ -416,6 +419,20 @@ impl Parser {
         })
     }
 
+    fn parse_switch_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        Ok(ast::Statement::Switch {
+            expression: expr,
+            body: Box::new(stmt),
+            data: None,
+        })
+    }
+
     fn parse_break_statement(&mut self) -> Result<ast::Statement, ParserError> {
         self.expect_peek(TokenKind::Semicolon)?;
         Ok(ast::Statement::Break(String::new()))
@@ -455,6 +472,27 @@ impl Parser {
         Ok(ast::Statement::Label(
             identifier,
             Box::new(self.parse_statement()?),
+        ))
+    }
+
+    fn parse_default_case_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Colon)?;
+        self.next_token()?;
+        Ok(ast::Statement::Default(
+            Box::new(self.parse_statement()?),
+            String::new(),
+        ))
+    }
+
+    fn parse_case_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::Colon)?;
+        self.next_token()?;
+        Ok(ast::Statement::Case(
+            expr,
+            Box::new(self.parse_statement()?),
+            String::new(),
         ))
     }
 

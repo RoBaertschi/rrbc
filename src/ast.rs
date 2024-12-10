@@ -153,6 +153,9 @@ pub enum Statement {
     },
     Goto(Identifier),
     Label(Identifier, Box<Statement>),
+    Default(Box<Statement>, Identifier),
+    // You should check if Expression is constant time. Which should be pretty easy.
+    Case(Expression, Box<Statement>, Identifier),
     Compound(Block),
     Break(Identifier),
     Continue(Identifier),
@@ -173,7 +176,22 @@ pub enum Statement {
         body: Box<Statement>,
         label: Identifier,
     },
+    Switch {
+        expression: Expression,
+        body: Box<Statement>,
+        /// This data will only be populated after the coresspondig pass is done. So only use this
+        /// in the that specific pass or in tacky generation.
+        data: Option<ResolvedSwitchData>,
+    },
     Null,
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ResolvedSwitchData {
+    /// Each case with a value
+    cases: Vec<i32>,
+    /// Does this switch have a default case?
+    has_default: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
