@@ -19,6 +19,7 @@ use crate::{
 use crate::semantic_analysis::{
     label_resolution::LabelResolutionError,
     loop_labeling::LoopLabelingError,
+    switch_resolution::SwitchResolutionError,
     variable_resolution::{self, VariableResolutionError},
 };
 
@@ -54,6 +55,9 @@ pub enum DriverExecutionError {
     #[cfg(feature = "validate")]
     #[error("{0}")]
     LoopLabelingError(#[from] LoopLabelingError),
+    #[cfg(feature = "validate")]
+    #[error("{0}")]
+    SwitchResolutionError(#[from] SwitchResolutionError),
 }
 
 #[derive(Default)]
@@ -249,10 +253,11 @@ impl Options {
         &mut self,
         program: ast::Program,
     ) -> Result<ast::Program, DriverExecutionError> {
-        use crate::semantic_analysis::{label_resolution, loop_labeling};
+        use crate::semantic_analysis::{label_resolution, loop_labeling, switch_resolution};
 
         let program = label_resolution::resolve_program(program)?;
         let program = loop_labeling::label_program(program)?;
+        let program = switch_resolution::resolve_program(program)?;
         Ok(variable_resolution::resolve_program(program)?)
     }
 

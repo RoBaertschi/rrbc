@@ -170,6 +170,25 @@ fn resolve_statement(
                 label,
             }
         }
+        Statement::Default(stmt, label) => {
+            Statement::Default(Box::new(resolve_statement(variable_map, *stmt)?), label)
+        }
+        Statement::Case(expr, stmt, label) => Statement::Case(
+            expr,
+            Box::new(resolve_statement(variable_map, *stmt)?),
+            label,
+        ),
+        Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => Statement::Switch {
+            expression: resolve_expression(variable_map, expression)?,
+            body: Box::new(resolve_statement(variable_map, *body)?),
+            label,
+            cases,
+        },
     })
 }
 

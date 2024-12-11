@@ -47,3 +47,11 @@ pub fn temp_switch_label() -> String {
         ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     )
 }
+
+pub fn temp_label(input: &str) -> String {
+    static ID: AtomicU64 = AtomicU64::new(0);
+    format!(
+        "tmp.{input}.{}",
+        ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    )
+}

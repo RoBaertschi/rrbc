@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[cfg(feature = "tacky")]
 use crate::tacky;
 
@@ -142,7 +144,7 @@ impl UnaryOperator {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
     Return(Expression),
     Expression(Expression),
@@ -182,17 +184,9 @@ pub enum Statement {
         label: Option<Identifier>,
         /// This data will only be populated after the coresspondig pass is done. So only use this
         /// in the that specific pass or in tacky generation.
-        data: Option<ResolvedSwitchData>,
+        cases: Option<HashMap<Option<i32>, String>>,
     },
     Null,
-}
-
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct ResolvedSwitchData {
-    /// Each case with a value
-    pub cases: Vec<i32>,
-    /// Does this switch have a default case?
-    pub has_default: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -208,13 +202,13 @@ pub struct Declaration {
     pub exp: Option<Expression>,
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BlockItem {
     S(Statement),
     D(Declaration),
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Block(pub Vec<BlockItem>);
 
 #[derive(Debug)]

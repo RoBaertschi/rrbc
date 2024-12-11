@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use thiserror::Error;
 
-use crate::ast::{Block, BlockItem, Expression, FunctionDefinition, Program, Statement};
+use crate::{
+    ast::{Block, BlockItem, Expression, FunctionDefinition, Program, Statement},
+    unique_id,
+};
 
 #[derive(Debug, Error)]
 pub enum SwitchResolutionError {
@@ -12,11 +15,8 @@ pub enum SwitchResolutionError {
     CaseNotInSwitch,
     #[error("Case expression is not compiletime constant {0:?}")]
     ExpressionIsNotConstant(Expression),
-}
-
-struct Data {
-    case_map: HashMap<Option<i32>, String>,
-    current_switch: Option<String>,
+    #[error("The switch case {0:?} is duplicated")]
+    DuplicatedSwitchCase(Option<i32>),
 }
 
 pub fn resolve_program(program: Program) -> Result<Program, SwitchResolutionError> {
@@ -29,11 +29,7 @@ pub fn resolve_program(program: Program) -> Result<Program, SwitchResolutionErro
 fn resolve_function_definition(
     function: FunctionDefinition,
 ) -> Result<FunctionDefinition, SwitchResolutionError> {
-    let mut data = Data {
-        case_map: HashMap::new(),
-        current_switch: None,
-    };
-
+    let mut data = None;
     let body = resolve_block(function.body, &mut data)?;
     Ok(FunctionDefinition {
         name: function.name,
@@ -41,11 +37,14 @@ fn resolve_function_definition(
     })
 }
 
-fn resolve_block(block: Block, data: &mut Data) -> Result<Block, SwitchResolutionError> {
+fn resolve_block(
+    block: Block,
+    cases: &mut Option<HashMap<Option<i32>, String>>,
+) -> Result<Block, SwitchResolutionError> {
     let mut items = vec![];
 
     for item in block.0 {
-        items.push(resolve_block_item(item, data)?);
+        items.push(resolve_block_item(item, cases)?);
     }
 
     Ok(Block(items))
@@ -53,7 +52,7 @@ fn resolve_block(block: Block, data: &mut Data) -> Result<Block, SwitchResolutio
 
 fn resolve_block_item(
     item: BlockItem,
-    data: &mut Data,
+    data: &mut Option<HashMap<Option<i32>, String>>,
 ) -> Result<BlockItem, SwitchResolutionError> {
     match item {
         BlockItem::S(stmt) => Ok(BlockItem::S(resolve_statement(stmt, data)?)),
@@ -68,7 +67,10 @@ fn resolve_constant(expression: Expression) -> Result<i32, SwitchResolutionError
     }
 }
 
-fn resolve_statement(stmt: Statement, data: &mut Data) -> Result<Statement, SwitchResolutionError> {
+fn resolve_statement(
+    stmt: Statement,
+    cases: &mut Option<HashMap<Option<i32>, String>>,
+) -> Result<Statement, SwitchResolutionError> {
     Ok(match stmt {
         Statement::If {
             condition,
@@ -76,31 +78,51 @@ fn resolve_statement(stmt: Statement, data: &mut Data) -> Result<Statement, Swit
             r#else,
         } => Statement::If {
             condition,
-            then: Box::new(resolve_statement(*then, data)?),
+            then: Box::new(resolve_statement(*then, cases)?),
             r#else: match r#else {
-                Some(stmt) => Some(Box::new(resolve_statement(*stmt, data)?)),
+                Some(stmt) => Some(Box::new(resolve_statement(*stmt, cases)?)),
                 None => None,
             },
         },
         Statement::Label(label, stmt) => {
-            Statement::Label(label, Box::new(resolve_statement(*stmt, data)?))
+            Statement::Label(label, Box::new(resolve_statement(*stmt, cases)?))
         }
-        Statement::Default(stmt, _) => match data.current_switch {
+        Statement::Default(stmt, _) => match cases {
             None => return Err(SwitchResolutionError::DefaultNotInSwitch),
-            Some(ref label) => Statement::Default(stmt, label.clone()),
+            Some(case_map) => {
+                if case_map.contains_key(&None) {
+                    return Err(SwitchResolutionError::DuplicatedSwitchCase(None));
+                }
+                let id = unique_id::temp_label("default");
+                case_map.insert(None, id.clone());
+                Statement::Default(Box::new(resolve_statement(*stmt, cases)?), id)
+            }
         },
-        Statement::Case(expr, stmt, _) => match data.current_switch {
+        Statement::Case(expr, stmt, _) => match cases {
             None => return Err(SwitchResolutionError::CaseNotInSwitch),
-            Some(ref label) => Statement::Case(expr, stmt, label.clone()),
+            Some(case_map) => {
+                let key = resolve_constant(expr)?;
+                let opt_key = Some(key);
+                if case_map.contains_key(&opt_key) {
+                    return Err(SwitchResolutionError::DuplicatedSwitchCase(opt_key));
+                }
+                let id = unique_id::temp_label("case");
+                case_map.insert(opt_key, id.clone());
+                Statement::Case(
+                    Expression::Constant(key),
+                    Box::new(resolve_statement(*stmt, cases)?),
+                    id,
+                )
+            }
         },
-        Statement::Compound(block) => Statement::Compound(resolve_block(block, data)?),
+        Statement::Compound(block) => Statement::Compound(resolve_block(block, cases)?),
         Statement::While {
             condition,
             body,
             label,
         } => Statement::While {
             condition,
-            body: Box::new(resolve_statement(*body, data)?),
+            body: Box::new(resolve_statement(*body, cases)?),
             label,
         },
         Statement::DoWhile {
@@ -109,7 +131,7 @@ fn resolve_statement(stmt: Statement, data: &mut Data) -> Result<Statement, Swit
             label,
         } => Statement::DoWhile {
             condition,
-            body: Box::new(resolve_statement(*body, data)?),
+            body: Box::new(resolve_statement(*body, cases)?),
             label,
         },
         Statement::For {
@@ -122,15 +144,24 @@ fn resolve_statement(stmt: Statement, data: &mut Data) -> Result<Statement, Swit
             init,
             condition,
             post,
-            body: Box::new(resolve_statement(*body, data)?),
+            body: Box::new(resolve_statement(*body, cases)?),
             label,
         },
         Statement::Switch {
             expression,
             body,
-            data,
             label,
-        } => todo!(),
+            ..
+        } => {
+            let mut new_map = Some(HashMap::new());
+            let new_body = Box::new(resolve_statement(*body, &mut new_map)?);
+            Statement::Switch {
+                expression,
+                body: new_body,
+                label,
+                cases: new_map,
+            }
+        }
 
         stmt @ (Statement::Return(_)
         | Statement::Null

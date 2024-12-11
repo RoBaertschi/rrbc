@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, FunctionDefinition, Program, ResolvedSwitchData, Statement},
+    ast::{Block, BlockItem, FunctionDefinition, Program, Statement},
     unique_id,
 };
 
@@ -162,7 +162,7 @@ fn label_statement(
         Statement::Switch {
             expression,
             body,
-            data,
+            cases: data,
             label: _,
         } => {
             let id = unique_id::temp_switch_label();
@@ -170,7 +170,7 @@ fn label_statement(
                 label: Some(id.clone()),
                 expression,
                 body: Box::new(label_statement(*body, current_label, Some(id))?),
-                data,
+                cases: data,
             })
         }
         stmt @ (Statement::Return(_)
