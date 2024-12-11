@@ -145,6 +145,26 @@ fn find_label_resolve_statement(
             body: Box::new(find_label_resolve_statement(state, *body)?),
             label,
         }),
+        Statement::Default(statement, label) => Ok(Statement::Default(
+            Box::new(find_label_resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Case(expression, statement, label) => Ok(Statement::Case(
+            expression,
+            Box::new(find_label_resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => Ok(Statement::Switch {
+            expression,
+            body: Box::new(find_label_resolve_statement(state, *body)?),
+            label,
+            cases,
+        }),
     }
 }
 
@@ -228,6 +248,26 @@ fn resolve_statement(
             post,
             body: Box::new(resolve_statement(state, *body)?),
             label,
+        }),
+        Statement::Default(statement, label) => Ok(Statement::Default(
+            Box::new(resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Case(expression, statement, label) => Ok(Statement::Case(
+            expression,
+            Box::new(resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => Ok(Statement::Switch {
+            expression,
+            body: Box::new(resolve_statement(state, *body)?),
+            label,
+            cases,
         }),
     }
 }

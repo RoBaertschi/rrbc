@@ -254,6 +254,7 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             body,
             label,
         } => {
+            let label = label.expect("If every path was successfull, this should be some.");
             let start = format!("{label}_continue");
             let end = format!("{label}_break");
             let mut instructions = vec![Instruction::Label(start.clone())];
@@ -270,6 +271,7 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             condition,
             label,
         } => {
+            let label = label.expect("If every path was successfull, this should be some.");
             let start = unique_id::temp_label_name("do_while_start");
             let mut instructions = vec![Instruction::Label(start.clone())];
             instructions.append(&mut emit_tacky_statement(*body));
@@ -287,6 +289,7 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             body,
             label,
         } => {
+            let label = label.expect("If every path was successfull, this should be some.");
             let start = unique_id::temp_label_name("for_start");
             let continue_label = format!("{label}_continue");
             let break_label = format!("{label}_break");
@@ -310,6 +313,17 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             instructions.push(Instruction::Label(break_label));
             instructions
         }
+        ast::Statement::Default(statement, label) => {
+            instructions.push(Instruction::Label(format!("{label}_break")));
+            instructions
+        }
+        ast::Statement::Case(expression, statement, label) => todo!(),
+        ast::Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => todo!(),
     }
 }
 
