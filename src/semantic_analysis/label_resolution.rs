@@ -112,6 +112,59 @@ fn find_label_resolve_statement(
         Statement::Compound(block) => {
             Ok(Statement::Compound(find_label_resolve_block(state, block)?))
         }
+        Statement::Break(label) => Ok(Statement::Break(label)),
+        Statement::Continue(label) => Ok(Statement::Continue(label)),
+        Statement::While {
+            condition,
+            body,
+            label,
+        } => Ok(Statement::While {
+            condition,
+            body: Box::new(find_label_resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::DoWhile {
+            body,
+            condition,
+            label,
+        } => Ok(Statement::DoWhile {
+            condition,
+            body: Box::new(find_label_resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::For {
+            init,
+            condition,
+            post,
+            body,
+            label,
+        } => Ok(Statement::For {
+            init,
+            condition,
+            post,
+            body: Box::new(find_label_resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::Default(statement, label) => Ok(Statement::Default(
+            Box::new(find_label_resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Case(expression, statement, label) => Ok(Statement::Case(
+            expression,
+            Box::new(find_label_resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => Ok(Statement::Switch {
+            expression,
+            body: Box::new(find_label_resolve_statement(state, *body)?),
+            label,
+            cases,
+        }),
     }
 }
 
@@ -163,5 +216,58 @@ fn resolve_statement(
             Box::new(resolve_statement(state, *stmt)?),
         )),
         Statement::Compound(block) => Ok(Statement::Compound(resolve_block(state, block)?)),
+        Statement::Break(label) => Ok(Statement::Break(label)),
+        Statement::Continue(label) => Ok(Statement::Continue(label)),
+        Statement::While {
+            condition,
+            body,
+            label,
+        } => Ok(Statement::While {
+            condition,
+            body: Box::new(resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::DoWhile {
+            body,
+            condition,
+            label,
+        } => Ok(Statement::DoWhile {
+            condition,
+            body: Box::new(resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::For {
+            init,
+            condition,
+            post,
+            body,
+            label,
+        } => Ok(Statement::For {
+            init,
+            condition,
+            post,
+            body: Box::new(resolve_statement(state, *body)?),
+            label,
+        }),
+        Statement::Default(statement, label) => Ok(Statement::Default(
+            Box::new(resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Case(expression, statement, label) => Ok(Statement::Case(
+            expression,
+            Box::new(resolve_statement(state, *statement)?),
+            label,
+        )),
+        Statement::Switch {
+            expression,
+            body,
+            label,
+            cases,
+        } => Ok(Statement::Switch {
+            expression,
+            body: Box::new(resolve_statement(state, *body)?),
+            label,
+            cases,
+        }),
     }
 }

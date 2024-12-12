@@ -1,17 +1,15 @@
 int main(void) {
-    int a = 0;
-    int b = 1;
-    a = 2;
-    b = 3;
-    a = 4;
+    int value = 7;
 
-    loop1:
-    if (a >= 20) {
-        goto end;
-    } else {
-        a++;
-        goto loop1;
+    switch (value) {
+    case 4:
+        return 4;
+    case 5:
+        break;
+    case 0:
+        return 0;
+    default:
+        return 255;
     }
-    end:
-    return a;
+    return 1;
 }

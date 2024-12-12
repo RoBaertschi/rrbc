@@ -72,12 +72,20 @@ pub enum TokenKind {
     Increment, // ++
 
     // Keywords
+    KWBreak,
+    KWCase,
+    KWContinue,
+    KWDefault,
+    KWDo,
+    KWElse,
+    KWFor,
+    KWGoto,
+    KWIf,
     KWInt,
     KWReturn,
+    KWSwitch,
     KWVoid,
-    KWIf,
-    KWElse,
-    KWGoto,
+    KWWhile,
 }
 
 #[derive(Debug, Clone)]
@@ -89,12 +97,20 @@ pub struct Token {
 impl TokenKind {
     pub fn from_string(string: &str) -> Self {
         match string {
+            "break" => Self::KWBreak,
+            "case" => Self::KWCase,
+            "continue" => Self::KWContinue,
+            "default" => Self::KWDefault,
+            "do" => Self::KWDo,
+            "else" => Self::KWElse,
+            "for" => Self::KWFor,
+            "goto" => Self::KWGoto,
+            "if" => Self::KWIf,
             "int" => Self::KWInt,
             "return" => Self::KWReturn,
+            "switch" => Self::KWSwitch,
             "void" => Self::KWVoid,
-            "if" => Self::KWIf,
-            "else" => Self::KWElse,
-            "goto" => Self::KWGoto,
+            "while" => Self::KWWhile,
             _ => Self::Identifier(string.to_owned()),
         }
     }

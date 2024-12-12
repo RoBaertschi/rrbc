@@ -39,7 +39,7 @@ pub enum Instruction {
     Label(String),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Value {
     Constant(i32),
     Var(Var),

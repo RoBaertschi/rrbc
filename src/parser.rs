@@ -218,13 +218,17 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected,
-                actual: self.cur_token.kind.clone(),
+                actual: self.peek_token.kind.clone(),
             })
         }
     }
 
     fn peek_token_is(&self, token: TokenKind) -> bool {
         mem::discriminant(&self.peek_token.kind) == mem::discriminant(&token)
+    }
+
+    fn cur_token_is(&self, token: TokenKind) -> bool {
+        mem::discriminant(&self.cur_token.kind) == mem::discriminant(&token)
     }
 
     fn peek_precedence(&self) -> Precedence {
@@ -287,6 +291,7 @@ impl Parser {
         Ok(ast::Block(body))
     }
 
+    // WARN: This will parse a semicolon!
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
         self.next_token()?;
 
@@ -322,9 +327,18 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
         match &self.cur_token.kind {
+            TokenKind::KWBreak => self.parse_break_statement(),
+            TokenKind::KWCase => self.parse_case_statement(),
+            TokenKind::KWDefault => self.parse_default_case_statement(),
+            TokenKind::KWContinue => self.parse_continue_statement(),
+            TokenKind::KWDo => self.parse_do_while_statement(),
+            TokenKind::KWFor => self.parse_for_statement(),
             TokenKind::KWReturn => self.parse_return_statement(),
+            TokenKind::KWSwitch => self.parse_switch_statement(),
             TokenKind::KWIf => self.parse_if_statement(),
             TokenKind::KWGoto => self.parse_goto_statement(),
+            TokenKind::KWWhile => self.parse_while_statement(),
+
             TokenKind::Semicolon => Ok(ast::Statement::Null),
             TokenKind::OpenBrace => self.parse_compound_statement(),
             TokenKind::Identifier(ident) if self.peek_token_is(TokenKind::Colon) => {
@@ -336,6 +350,98 @@ impl Parser {
                 Ok(ast::Statement::Expression(expr))
             }
         }
+    }
+
+    fn parse_while_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        Ok(ast::Statement::While {
+            condition: expr,
+            body: Box::new(stmt),
+            label: None,
+        })
+    }
+
+    fn parse_do_while_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        self.expect_peek(TokenKind::KWWhile)?;
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.expect_peek(TokenKind::Semicolon)?;
+        Ok(ast::Statement::DoWhile {
+            body: Box::new(stmt),
+            condition: expr,
+            label: None,
+        })
+    }
+
+    fn parse_for_init(&mut self) -> Result<ast::ForInit, ParserError> {
+        match self.cur_token.kind {
+            TokenKind::Semicolon => Ok(ast::ForInit::None),
+            TokenKind::KWInt => {
+                let decl = self.parse_declaration()?;
+                Ok(ast::ForInit::InitDecl(decl))
+            }
+            _ => {
+                let expr = self.parse_expression(Precedence::Lowest)?;
+                self.expect_peek(TokenKind::Semicolon)?;
+                Ok(ast::ForInit::InitExp(expr))
+            }
+        }
+    }
+
+    fn parse_for_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let init = self.parse_for_init()?;
+        self.next_token()?;
+        let optional_condition = self.parse_optional_expression(TokenKind::Semicolon)?;
+        self.next_token()?;
+        let optional_end = self.parse_optional_expression(TokenKind::CloseParen)?;
+
+        self.next_token()?;
+
+        let body = Box::new(self.parse_statement()?);
+
+        Ok(ast::Statement::For {
+            init,
+            condition: optional_condition,
+            post: optional_end,
+            body,
+            label: None,
+        })
+    }
+
+    fn parse_switch_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::OpenParen)?;
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::CloseParen)?;
+        self.next_token()?;
+        let stmt = self.parse_statement()?;
+        Ok(ast::Statement::Switch {
+            expression: expr,
+            body: Box::new(stmt),
+            label: None,
+            cases: None,
+        })
+    }
+
+    fn parse_break_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Semicolon)?;
+        Ok(ast::Statement::Break(String::new()))
+    }
+
+    fn parse_continue_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Semicolon)?;
+        Ok(ast::Statement::Continue(String::new()))
     }
 
     fn parse_return_statement(&mut self) -> Result<ast::Statement, ParserError> {
@@ -367,6 +473,27 @@ impl Parser {
         Ok(ast::Statement::Label(
             identifier,
             Box::new(self.parse_statement()?),
+        ))
+    }
+
+    fn parse_default_case_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.expect_peek(TokenKind::Colon)?;
+        self.next_token()?;
+        Ok(ast::Statement::Default(
+            Box::new(self.parse_statement()?),
+            String::new(),
+        ))
+    }
+
+    fn parse_case_statement(&mut self) -> Result<ast::Statement, ParserError> {
+        self.next_token()?;
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::Colon)?;
+        self.next_token()?;
+        Ok(ast::Statement::Case(
+            expr,
+            Box::new(self.parse_statement()?),
+            String::new(),
         ))
     }
 
@@ -430,6 +557,19 @@ impl Parser {
                 self.parse_expression_postfix(left_exp)
             }
             None => Err(ParserError::NoPrefixFunction(self.cur_token.kind.clone())),
+        }
+    }
+
+    fn parse_optional_expression(
+        &mut self,
+        end: TokenKind,
+    ) -> Result<Option<ast::Expression>, ParserError> {
+        if self.cur_token_is(end.clone()) {
+            Ok(None)
+        } else {
+            let expr = self.parse_expression(Precedence::Lowest)?;
+            self.expect_peek(end)?;
+            Ok(Some(expr))
         }
     }
 
@@ -644,7 +784,7 @@ mod tests {
 
         assert_eq!(
             program.function_definition.body,
-            vec![
+            ast::Block(vec![
                 ast::BlockItem::D(ast::Declaration {
                     name: "a".to_owned(),
                     exp: Some(ast::Expression::Var("hello".to_owned()))
@@ -653,7 +793,7 @@ mod tests {
                     name: "b".to_owned(),
                     exp: None,
                 }),
-            ]
+            ])
         );
     }
 
@@ -675,7 +815,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -684,7 +824,7 @@ mod tests {
                     },),
                     rhs: Box::new(ast::Expression::Constant(2))
                 }
-            ))]
+            ))])
         );
     }
 
@@ -706,7 +846,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -718,7 +858,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))]
+            ))])
         );
     }
 
@@ -740,7 +880,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -756,7 +896,7 @@ mod tests {
                         rhs: Box::new(ast::Expression::Constant(4))
                     })
                 }
-            ))]
+            ))])
         );
     }
 
@@ -778,7 +918,7 @@ mod tests {
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(
             program.function_definition.body,
-            vec![ast::BlockItem::S(ast::Statement::Return(
+            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Binary {
@@ -791,7 +931,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))]
+            ))])
         );
     }
     #[test]
@@ -809,7 +949,7 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+        let expected_result = ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
             ast::Expression::Binary {
                 op: BinaryOperator::ShiftRight,
                 lhs: Box::new(ast::Expression::Binary {
@@ -823,7 +963,7 @@ mod tests {
                 }),
                 rhs: Box::new(ast::Expression::Constant(1)),
             },
-        ))];
+        ))]);
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
@@ -844,7 +984,7 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        let expected_result = vec![ast::BlockItem::S(ast::Statement::Return(
+        let expected_result = ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
             ast::Expression::Binary {
                 op: BinaryOperator::BitwiseOr,
                 lhs: Box::new(ast::Expression::Binary {
@@ -862,7 +1002,7 @@ mod tests {
                 }),
                 rhs: Box::new(ast::Expression::Constant(3)),
             },
-        ))];
+        ))]);
 
         assert_eq!(program.function_definition.name, "main".to_owned());
         assert_eq!(program.function_definition.body, expected_result);
