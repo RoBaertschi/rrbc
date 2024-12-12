@@ -314,16 +314,60 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
             instructions
         }
         ast::Statement::Default(statement, label) => {
-            instructions.push(Instruction::Label(format!("{label}_break")));
+            let mut instructions = vec![Instruction::Label(label)];
+            instructions.append(&mut emit_tacky_statement(*statement));
             instructions
         }
-        ast::Statement::Case(expression, statement, label) => todo!(),
+        ast::Statement::Case(_, statement, label) => {
+            let mut instructions = vec![Instruction::Label(label)];
+            instructions.append(&mut emit_tacky_statement(*statement));
+            instructions
+        }
         ast::Statement::Switch {
             expression,
             body,
-            label,
+            label: switch_label,
             cases,
-        } => todo!(),
+        } => {
+            let switch_label = format!(
+                "{}_break",
+                switch_label.expect("Switch label should be populated after all values.")
+            );
+            let mut default = None;
+            let (mut instructions, value) = emit_tacky_expression(expression);
+            let cases = cases.expect("Cases has to be Some after all passes.");
+            for (key, label) in &cases {
+                if let Some(constant) = key {
+                    let dst_name = unique_id::temp_variable_name();
+                    let dst = Var(dst_name.clone());
+
+                    instructions.append(&mut vec![
+                        Instruction::Binary {
+                            op: tacky::BinaryOperator::Equal,
+                            lhs: value.clone(),
+                            rhs: Value::Constant(*constant),
+                            dst: dst.clone(),
+                        },
+                        // 0 is false, everything else is true.
+                        Instruction::JumpIfNotZero(Value::Var(dst), label.clone()),
+                    ]);
+                } else {
+                    default = Some(label.clone());
+                }
+            }
+
+            // Generate default / end jump
+            instructions.push(Instruction::Jump(match default {
+                Some(label) => label,
+                None => switch_label.clone(),
+            }));
+
+            instructions.append(&mut emit_tacky_statement(*body));
+
+            instructions.push(Instruction::Label(switch_label));
+
+            instructions
+        }
     }
 }
 

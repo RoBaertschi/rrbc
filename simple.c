@@ -1,24 +1,15 @@
 int main(void) {
-    int a = 0;
-    int b = 1;
-    a = 2;
-    b = 3;
-    a = 4;
+    int value = 7;
 
-    switch (a) {
-        a = 2;
-    case 1 + 2:
-        a = 4;
-
+    switch (value) {
+    case 4:
+        return 4;
+    case 5:
+        break;
+    case 0:
+        return 0;
+    default:
+        return 255;
     }
-
-    if (a >= 20) {
-    } else {
-        a++;
-    }
-
-    for (int i = 0; i < 10; i++) {
-    }
-
-    return a;
+    return 1;
 }

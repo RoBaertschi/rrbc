@@ -429,8 +429,8 @@ impl Parser {
         Ok(ast::Statement::Switch {
             expression: expr,
             body: Box::new(stmt),
-            data: None,
             label: None,
+            cases: None,
         })
     }
 
