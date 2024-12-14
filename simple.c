@@ -1,6 +1,11 @@
 int main(void) {
     int value = 7;
 
+    int pain = 2;
+    while (pain < 3) {
+        pain++;
+    }
+
     switch (value) {
     case 4:
         return 4;

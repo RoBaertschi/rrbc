@@ -48,6 +48,11 @@ mod tests {
                     dst: assembly::Operand::Register(assembly::Register::AX)
                 },
                 Instruction::Ret,
+                Instruction::Mov {
+                    src: assembly::Operand::Imm(0),
+                    dst: assembly::Operand::Register(assembly::Register::AX)
+                },
+                Instruction::Ret,
             ]
         )
     }

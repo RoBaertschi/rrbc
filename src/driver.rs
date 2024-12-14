@@ -73,25 +73,36 @@ pub enum Stage {
 }
 
 #[derive(Default)]
-pub struct Options {
-    stage: Stage,
+pub enum ProgramType {
+    #[default]
+    Executable,
+    ObjectFile,
+}
+
+pub struct FileSet {
     input_file: PathBuf,
     preprocessed_file: PathBuf,
-    assembly_file: PathBuf,
     output_file: PathBuf,
+}
+
+#[derive(Default)]
+pub struct Options {
+    stage: Stage,
+    program_type: ProgramType,
+    input_files: Vec<PathBuf>,
 
     lexer: Option<lexer::Lexer>,
 }
 
 fn print_help(file: Option<String>) -> ! {
     println!(
-        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S]",
+        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S | -c]",
         file.unwrap_or("rbc (could not extract executable path.)".to_string())
     );
     process::exit(1)
 }
 
-fn is_flag(string: &str) -> Option<Stage> {
+fn is_goal_flag(string: &str) -> Option<Stage> {
     match string {
         "--lex" => Some(Stage::Lex),
         "--parse" => Some(Stage::Parse),
@@ -120,22 +131,23 @@ impl Options {
         }
 
         let mut goal: Stage = Default::default();
-        let mut file_path: Option<PathBuf> = None;
+        let mut program_type: ProgramType = Default::default();
+        let mut file_paths: Vec<PathBuf> = vec![];
 
         for arg in args {
-            if let Some(found_goal) = is_flag(&arg) {
+            if let Some(found_goal) = is_goal_flag(&arg) {
                 goal = found_goal;
                 continue;
             }
-
-            if file_path.is_some() {
-                println!("rbc only accecpts and file or the flag was not regognized");
-                print_help(target);
+            if &arg == "-c" {
+                program_type = ProgramType::ObjectFile;
+                continue;
             }
+
             match PathBuf::from_str(&arg) {
                 Ok(path) => {
                     if path.exists() {
-                        file_path = Some(path);
+                        file_paths.push(path);
                     } else {
                         println!("could not find file {}", arg);
                         process::exit(1);
@@ -148,36 +160,26 @@ impl Options {
             }
         }
 
-        if file_path.is_none() {
-            println!("no input file");
+        if file_paths.is_empty() {
+            println!("no input files");
             print_help(target);
         }
 
-        let input_file = file_path.unwrap();
-        let mut preprocessed_file = input_file.clone();
-        preprocessed_file.set_extension("i");
-        let mut assembly_file = input_file.clone();
-        assembly_file.set_extension("s");
-        let mut output_file = input_file.clone();
-        output_file.set_extension("");
-
         Self {
             stage: goal,
-            input_file,
-            preprocessed_file,
-            assembly_file,
-            output_file,
+            input_files: file_paths,
+            program_type,
             ..Default::default()
         }
     }
 
-    pub fn run_preprocessor(&self) -> Result<(), DriverExecutionError> {
+    pub fn run_preprocessor(&self, file_set: &FileSet) -> Result<(), DriverExecutionError> {
         let mut command = Command::new("gcc")
             .arg("-E")
             .arg("-P")
-            .arg(self.input_file.as_os_str())
+            .arg(file_set.input_file.as_os_str())
             .arg("-o")
-            .arg(self.preprocessed_file.as_os_str())
+            .arg(file_set.preprocessed_file.as_os_str())
             .spawn()?;
 
         let exit_code = command.wait()?;
@@ -189,7 +191,7 @@ impl Options {
             ));
         }
 
-        if !self.preprocessed_file.exists() {
+        if !file_set.preprocessed_file.exists() {
             return Err(DriverExecutionError::PreprocessorNoFile);
         }
 

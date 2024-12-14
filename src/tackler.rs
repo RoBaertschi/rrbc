@@ -456,6 +456,7 @@ mod tests {
                 dst: Var("tmp.0".to_owned()),
             },
             Instruction::Return(Value::Var(Var("tmp.0".to_owned()))),
+            Instruction::Return(Value::Constant(0)),
         ];
 
         assert_eq!(expected.len(), program.0.body.len());
