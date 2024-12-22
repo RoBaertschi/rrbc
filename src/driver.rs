@@ -90,13 +90,14 @@ pub struct Options {
     stage: Stage,
     program_type: ProgramType,
     input_files: Vec<PathBuf>,
+    output_file: PathBuf,
 
     lexer: Option<lexer::Lexer>,
 }
 
 fn print_help(file: Option<String>) -> ! {
     println!(
-        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S | -c]",
+        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S | -c | -o FILE]",
         file.unwrap_or("rbc (could not extract executable path.)".to_string())
     );
     process::exit(1)
@@ -133,14 +134,38 @@ impl Options {
         let mut goal: Stage = Default::default();
         let mut program_type: ProgramType = Default::default();
         let mut file_paths: Vec<PathBuf> = vec![];
+        let mut output_path: Option<PathBuf> = None;
+
+        let mut get_output = false;
 
         for arg in args {
+            if get_output {
+                match PathBuf::from_str(&arg) {
+                    Ok(path) => {
+                        output_path = Some(path);
+                    }
+                    Err(err) => {
+                        println!("could not parse path {} because of {}", arg, err);
+                        process::exit(1);
+                    }
+                }
+            }
+
             if let Some(found_goal) = is_goal_flag(&arg) {
                 goal = found_goal;
                 continue;
             }
             if &arg == "-c" {
                 program_type = ProgramType::ObjectFile;
+                continue;
+            }
+            if &arg == "-o" {
+                if output_path.is_some() {
+                    println!("Output path specified twice. Please only specify one output path.");
+                    process::exit(1);
+                }
+
+                get_output = true;
                 continue;
             }
 
@@ -165,10 +190,29 @@ impl Options {
             print_help(target);
         }
 
+        if let None = output_path {
+            if file_paths.len() == 1 {
+                let mut output = file_paths[0].clone();
+                match program_type {
+                    ProgramType::Executable => {
+                        output.set_extension("");
+                    }
+                    ProgramType::ObjectFile => {
+                        output.set_extension("o");
+                    }
+                }
+                output_path = Some(output);
+            } else {
+                println!("No output path specified with multiple inputs, please specify a output path with -o");
+                process::exit(1);
+            }
+        }
+
         Self {
             stage: goal,
             input_files: file_paths,
             program_type,
+            output_file: output_path.expect("output_path is none which is impossible."),
             ..Default::default()
         }
     }
@@ -198,11 +242,19 @@ impl Options {
         Ok(())
     }
 
-    pub fn run_assembler(&self) -> Result<(), DriverExecutionError> {
+    pub fn run_assembler(
+        &self,
+        input_files: &Vec<PathBuf>,
+        output_file: &PathBuf,
+    ) -> Result<(), DriverExecutionError> {
         let mut command = Command::new("gcc")
-            .arg(self.assembly_file.as_os_str())
+            .args(input_files.iter().map(|file| file.as_os_str()))
             .arg("-o")
-            .arg(self.output_file.as_os_str())
+            .arg(output_file.as_os_str())
+            .args(match self.program_type {
+                ProgramType::Executable => vec![],
+                ProgramType::ObjectFile => vec!["-c"],
+            })
             .spawn()?;
 
         let exit_code = command.wait()?;
@@ -214,15 +266,15 @@ impl Options {
             ));
         }
 
-        if !self.output_file.exists() {
+        if !output_file.exists() {
             return Err(DriverExecutionError::AssemblerNoFile);
         }
 
         Ok(())
     }
 
-    pub fn run_lexer(&mut self) -> Result<(), DriverExecutionError> {
-        let input = fs::read_to_string(&self.preprocessed_file)?;
+    pub fn run_lexer(&mut self, file_set: &FileSet) -> Result<(), DriverExecutionError> {
+        let input = fs::read_to_string(&file_set.preprocessed_file)?;
 
         let lexer = lexer::Lexer::new(input);
 
@@ -282,8 +334,9 @@ impl Options {
     pub fn run_assembly_emission(
         &self,
         program: assembly::Program,
+        file_set: &FileSet,
     ) -> Result<(), DriverExecutionError> {
-        fs::write(&self.assembly_file, program.emit(0))?;
+        fs::write(&file_set.output_file, program.emit(0))?;
 
         Ok(())
     }
@@ -293,63 +346,80 @@ pub fn run() -> Result<(), DriverExecutionError> {
     let args = env::args();
     let mut opts = Options::parse_args(args);
 
-    opts.run_preprocessor()?;
+    let mut assembly_output_files = vec![];
 
-    opts.run_lexer()?;
+    for input_file in opts.input_files.clone() {
+        let mut preprocessed_file = input_file.clone();
+        preprocessed_file.set_extension("i");
+        let mut output_file = input_file.clone();
+        output_file.set_extension("S");
 
-    if let Err(err) = fs::remove_file(&opts.preprocessed_file) {
-        eprintln!(
-            "WARN: Could not remove the file {:?} due to {}, continuing",
-            &opts.preprocessed_file, err
-        );
-    }
+        let file_set = FileSet {
+            input_file: input_file.clone(),
+            preprocessed_file,
+            output_file,
+        };
 
-    if let Stage::Lex = opts.stage {
-        return Ok(());
-    }
+        opts.run_preprocessor(&file_set)?;
+        opts.run_lexer(&file_set)?;
 
-    let mut program = opts.run_parser()?;
+        if let Err(err) = fs::remove_file(&file_set.preprocessed_file) {
+            eprintln!(
+                "WARN: Could not remove the file {:?} due to {}, continuing",
+                &file_set.preprocessed_file, err
+            );
+        }
 
-    if let Stage::Parse = opts.stage {
-        println!("{:?}", program);
-        return Ok(());
-    }
-
-    #[cfg(feature = "validate")]
-    {
-        program = opts.run_validator(program)?;
-        _ = program;
-
-        if let Stage::Validate = opts.stage {
+        if let Stage::Lex = opts.stage {
             return Ok(());
         }
 
-        #[cfg(feature = "tacky")]
+        let mut program = opts.run_parser()?;
+
+        if let Stage::Parse = opts.stage {
+            println!("{:?}", program);
+            return Ok(());
+        }
+
+        #[cfg(feature = "validate")]
         {
-            let program = tackler::emit_tacky_program(program);
+            program = opts.run_validator(program)?;
+            _ = program;
 
-            if let Stage::Tacky = opts.stage {
-                println!("{:#?}", program);
+            if let Stage::Validate = opts.stage {
                 return Ok(());
             }
 
-            let program = opts.run_code_gen(program)?;
+            #[cfg(feature = "tacky")]
+            {
+                let program = tackler::emit_tacky_program(program);
 
-            if let Stage::Codegen = opts.stage {
-                return Ok(());
-            }
-
-            opts.run_assembly_emission(program)?;
-
-            if let Stage::Compile = opts.stage {
-                opts.run_assembler()?;
-
-                if let Err(err) = fs::remove_file(&opts.assembly_file) {
-                    eprintln!(
-                        "WARN: Could not remove the file {:?} due to {}, finishing...",
-                        &opts.assembly_file, err
-                    )
+                if let Stage::Tacky = opts.stage {
+                    println!("{:#?}", program);
+                    return Ok(());
                 }
+
+                let program = opts.run_code_gen(program)?;
+
+                if let Stage::Codegen = opts.stage {
+                    return Ok(());
+                }
+
+                opts.run_assembly_emission(program, &file_set)?;
+                assembly_output_files.push(file_set.output_file);
+            }
+        }
+    }
+
+    if let Stage::Compile = opts.stage {
+        opts.run_assembler(&assembly_output_files, &opts.output_file)?;
+
+        for file in assembly_output_files {
+            if let Err(err) = fs::remove_file(&file) {
+                eprintln!(
+                    "WARN: Could not remove the file {:?} due to {}, finishing...",
+                    &file, err
+                )
             }
         }
     }
