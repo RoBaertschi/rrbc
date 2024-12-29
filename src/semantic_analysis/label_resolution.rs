@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, FunctionDefinition, Program, Statement},
+    ast::{Block, BlockItem, FunctionDeclaration, Program, Statement},
     unique_id,
 };
 
@@ -29,8 +29,8 @@ pub fn resolve_program(program: Program) -> Result<Program, LabelResolutionError
 }
 
 pub fn resolve_function(
-    function: FunctionDefinition,
-) -> Result<FunctionDefinition, LabelResolutionError> {
+    function: FunctionDeclaration,
+) -> Result<FunctionDeclaration, LabelResolutionError> {
     let mut state = State {
         map: LabelMap::new(),
         function_name: function.name,
@@ -39,7 +39,7 @@ pub fn resolve_function(
     let mut body = find_label_resolve_block(&mut state, function.body)?;
     body = resolve_block(&mut state, body)?;
 
-    Ok(FunctionDefinition {
+    Ok(FunctionDeclaration {
         name: state.function_name,
         body,
     })

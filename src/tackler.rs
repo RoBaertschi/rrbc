@@ -407,7 +407,7 @@ pub fn emit_tacky_block_item(block_item: ast::BlockItem) -> Vec<Instruction> {
     }
 }
 
-pub fn emit_tacky_function(func: ast::FunctionDefinition) -> FunctionDefiniton {
+pub fn emit_tacky_function(func: ast::FunctionDeclaration) -> FunctionDefiniton {
     let mut body = vec![];
 
     body.append(&mut emit_tacky_block(func.body));

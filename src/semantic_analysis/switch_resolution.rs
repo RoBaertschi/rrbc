@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, Expression, FunctionDefinition, Program, Statement},
+    ast::{Block, BlockItem, Expression, FunctionDeclaration, Program, Statement},
     unique_id,
 };
 
@@ -27,11 +27,11 @@ pub fn resolve_program(program: Program) -> Result<Program, SwitchResolutionErro
 }
 
 fn resolve_function_definition(
-    function: FunctionDefinition,
-) -> Result<FunctionDefinition, SwitchResolutionError> {
+    function: FunctionDeclaration,
+) -> Result<FunctionDeclaration, SwitchResolutionError> {
     let mut data = None;
     let body = resolve_block(function.body, &mut data)?;
-    Ok(FunctionDefinition {
+    Ok(FunctionDeclaration {
         name: function.name,
         body,
     })

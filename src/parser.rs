@@ -75,6 +75,8 @@ pub enum ParserError {
     },
     #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
     DeclarationExpectedAssignOrSemicolon(TokenKind),
+    #[error("Expected a list of parameters, got \"{0:?}\"")]
+    ExpectedParamList(TokenKind),
     #[error("Could not find a prefix function for \"{0:?}\".")]
     NoPrefixFunction(TokenKind),
 }
@@ -249,7 +251,7 @@ impl Parser {
         })
     }
 
-    fn parse_function_definition(&mut self) -> Result<ast::FunctionDefinition, ParserError> {
+    fn parse_function_definition(&mut self) -> Result<ast::FunctionDeclaration, ParserError> {
         self.expect(TokenKind::KWInt)?;
         if let TokenKind::Identifier(name) = self.peek_token.kind.clone() {
             self.next_token()?;
@@ -260,7 +262,7 @@ impl Parser {
 
             let block = self.parse_block()?;
 
-            Ok(ast::FunctionDefinition {
+            Ok(ast::FunctionDeclaration {
                 name: name.to_string(),
                 body: block,
             })
@@ -291,6 +293,41 @@ impl Parser {
         Ok(ast::Block(body))
     }
 
+    fn parse_param_list(&mut self) -> Result<Vec<ast::Identifier>, ParserError> {
+        match &self.cur_token.kind {
+            TokenKind::KWVoid => {
+                self.expect_peek(TokenKind::CloseParen)?;
+                Ok(vec![])
+            }
+            TokenKind::KWInt => {
+                let mut params = vec![];
+                while &self.cur_token.kind != &TokenKind::CloseParen {
+                    self.expect_peek(TokenKind::Identifier(String::new()))?;
+                    let ident = match &self.cur_token.kind {
+                        TokenKind::Identifier(content) => content.clone(),
+                        _ => unreachable!(),
+                    };
+                    params.push(ident);
+                    // Comma or close paren
+                    self.next_token()?;
+                    match &self.cur_token.kind {
+                        TokenKind::Comma => {
+                            self.expect_peek(TokenKind::KWInt)?;
+                        }
+                        tok => {
+                            return Err(ParserError::UnexpectedToken {
+                                expected: TokenKind::CloseParen,
+                                actual: tok.clone(),
+                            })
+                        }
+                    };
+                }
+                Ok(params)
+            }
+            tok => Err(ParserError::ExpectedParamList(tok.clone())),
+        }
+    }
+
     // WARN: This will parse a semicolon!
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
         self.next_token()?;
@@ -311,6 +348,7 @@ impl Parser {
                         exp: Some(expr),
                     })
                 }
+                TokenKind::OpenParen => self.expect_peek(expected),
                 tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
                     tok.clone(),
                 )),

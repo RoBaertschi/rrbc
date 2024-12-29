@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, FunctionDefinition, Program, Statement},
+    ast::{Block, BlockItem, FunctionDeclaration, Program, Statement},
     unique_id,
 };
 
@@ -22,10 +22,10 @@ pub fn label_program(program: Program) -> Result<Program, LoopLabelingError> {
 }
 
 fn label_function_definition(
-    function: FunctionDefinition,
-) -> Result<FunctionDefinition, LoopLabelingError> {
+    function: FunctionDeclaration,
+) -> Result<FunctionDeclaration, LoopLabelingError> {
     let body = label_block(function.body, None, None)?;
-    Ok(FunctionDefinition {
+    Ok(FunctionDeclaration {
         name: function.name,
         body,
     })

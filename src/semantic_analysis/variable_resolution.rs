@@ -39,7 +39,7 @@ pub fn resolve_program(program: Program) -> Result<Program, VariableResolutionEr
     let mut variable_map = VariableMap::new();
 
     Ok(Program {
-        function_definition: crate::ast::FunctionDefinition {
+        function_definition: crate::ast::FunctionDeclaration {
             name: program.function_definition.name,
             body: resolve_block(&mut variable_map, program.function_definition.body)?,
         },

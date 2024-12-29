@@ -28,6 +28,7 @@ pub enum TokenKind {
     OpenBrace,
     CloseBrace,
     Semicolon,
+    Comma,
 
     // Ternary
     QuestionMark, // ?
@@ -229,6 +230,7 @@ impl Lexer {
             '?' => TokenKind::QuestionMark,
             ';' => TokenKind::Semicolon,
             '~' => TokenKind::Tilde,
+            ',' => TokenKind::Comma,
             '+' => match self.peek_char() {
                 '+' => {
                     self.read_char();
