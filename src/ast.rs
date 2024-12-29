@@ -192,7 +192,7 @@ pub enum Statement {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ForInit {
-    InitDecl(Declaration),
+    InitDecl(VariableDeclaration),
     InitExp(Expression),
     None,
 }

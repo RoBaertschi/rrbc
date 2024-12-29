@@ -73,6 +73,11 @@ pub enum ParserError {
         expected: TokenKind,
         actual: TokenKind,
     },
+    #[error("Unexpected Token, expected one of: {expected:?}, actual: \"{actual:?}\"")]
+    UnexpectedTokens {
+        expected: Vec<TokenKind>,
+        actual: TokenKind,
+    },
     #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
     DeclarationExpectedAssignOrSemicolon(TokenKind),
     #[error("Expected a list of parameters, got \"{0:?}\"")]
@@ -242,36 +247,59 @@ impl Parser {
     }
 
     pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
-        let function_definition = self.parse_function_definition()?;
+        let mut funcs = vec![];
 
-        self.expect_peek(TokenKind::Eof)?;
+        while !self.cur_token_is(TokenKind::Eof) {
+            funcs.push(self.parse_function_declaration_full()?);
+            self.next_token()?;
+        }
 
         Ok(ast::Program {
-            function_definition,
+            function_declrations: funcs,
         })
     }
 
-    fn parse_function_definition(&mut self) -> Result<ast::FunctionDeclaration, ParserError> {
-        self.expect(TokenKind::KWInt)?;
-        if let TokenKind::Identifier(name) = self.peek_token.kind.clone() {
-            self.next_token()?;
+    fn parse_function_declaration_full(&mut self) -> Result<ast::FunctionDeclaration, ParserError> {
+        self.next_token()?;
+        if let TokenKind::Identifier(name) = self.cur_token.kind.clone() {
             self.expect_peek(TokenKind::OpenParen)?;
-            self.expect_peek(TokenKind::KWVoid)?;
-            self.expect_peek(TokenKind::CloseParen)?;
-            self.expect_peek(TokenKind::OpenBrace)?;
-
-            let block = self.parse_block()?;
-
-            Ok(ast::FunctionDeclaration {
-                name: name.to_string(),
-                body: block,
-            })
+            self.parse_function_declaration(name)
         } else {
             Err(ParserError::UnexpectedToken {
-                expected: TokenKind::Identifier("expected".to_owned()),
+                expected: TokenKind::Identifier(String::new()),
                 actual: self.cur_token.kind.clone(),
             })
         }
+    }
+
+    // Expects to be on (
+    fn parse_function_declaration(
+        &mut self,
+        identifier: String,
+    ) -> Result<ast::FunctionDeclaration, ParserError> {
+        self.expect(TokenKind::OpenParen)?;
+        self.next_token()?;
+
+        let params = self.parse_param_list()?;
+
+        self.next_token()?;
+
+        let block = match &self.cur_token.kind {
+            TokenKind::Semicolon => None,
+            TokenKind::OpenBrace => Some(self.parse_block()?),
+            tok => {
+                return Err(ParserError::UnexpectedTokens {
+                    expected: vec![TokenKind::Semicolon, TokenKind::OpenBrace],
+                    actual: tok.clone(),
+                })
+            }
+        };
+
+        Ok(ast::FunctionDeclaration {
+            name: identifier,
+            body: block,
+            params,
+        })
     }
 
     fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
@@ -314,9 +342,10 @@ impl Parser {
                         TokenKind::Comma => {
                             self.expect_peek(TokenKind::KWInt)?;
                         }
+                        TokenKind::CloseParen => {}
                         tok => {
-                            return Err(ParserError::UnexpectedToken {
-                                expected: TokenKind::CloseParen,
+                            return Err(ParserError::UnexpectedTokens {
+                                expected: vec![TokenKind::CloseParen, TokenKind::Comma],
                                 actual: tok.clone(),
                             })
                         }
@@ -328,6 +357,45 @@ impl Parser {
         }
     }
 
+    fn parse_variable_declaration_full(&mut self) -> Result<ast::VariableDeclaration, ParserError> {
+        self.expect(TokenKind::KWInt)?;
+        self.next_token()?;
+        if let TokenKind::Identifier(ident) = self.cur_token.kind.clone() {
+            self.next_token()?;
+            self.parse_variable_declaration(ident)
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected: TokenKind::Identifier(String::new()),
+                actual: self.cur_token.kind.clone(),
+            })
+        }
+    }
+
+    fn parse_variable_declaration(
+        &mut self,
+        identifier: String,
+    ) -> Result<ast::VariableDeclaration, ParserError> {
+        match &self.cur_token.kind {
+            TokenKind::Semicolon => Ok(ast::VariableDeclaration {
+                name: identifier,
+                exp: None,
+            }),
+            TokenKind::Assign => {
+                self.next_token()?;
+                let expr = self.parse_expression(self.cur_precedence())?;
+                self.expect_peek(TokenKind::Semicolon)?;
+                Ok(ast::VariableDeclaration {
+                    name: identifier,
+                    exp: Some(expr),
+                })
+            }
+            tok => Err(ParserError::UnexpectedTokens {
+                expected: vec![TokenKind::Semicolon, TokenKind::Assign],
+                actual: tok.clone(),
+            }),
+        }
+    }
+
     // WARN: This will parse a semicolon!
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
         self.next_token()?;
@@ -335,20 +403,22 @@ impl Parser {
         if let TokenKind::Identifier(ident) = self.cur_token.kind.clone() {
             self.next_token()?;
             match &self.cur_token.kind {
-                TokenKind::Semicolon => Ok(ast::Declaration {
+                TokenKind::Semicolon => Ok(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: ident,
                     exp: None,
-                }),
+                })),
                 TokenKind::Assign => {
                     self.next_token()?;
                     let expr = self.parse_expression(self.cur_precedence())?;
                     self.expect_peek(TokenKind::Semicolon)?;
-                    Ok(ast::Declaration {
+                    Ok(ast::Declaration::VarDecl(ast::VariableDeclaration {
                         name: ident,
                         exp: Some(expr),
-                    })
+                    }))
                 }
-                TokenKind::OpenParen => self.expect_peek(expected),
+                TokenKind::OpenParen => self
+                    .parse_function_declaration(ident)
+                    .map(|ok| ast::Declaration::FunDecl(ok)),
                 tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
                     tok.clone(),
                 )),
@@ -424,7 +494,7 @@ impl Parser {
         match self.cur_token.kind {
             TokenKind::Semicolon => Ok(ast::ForInit::None),
             TokenKind::KWInt => {
-                let decl = self.parse_declaration()?;
+                let decl = self.parse_variable_declaration_full()?;
                 Ok(ast::ForInit::InitDecl(decl))
             }
             _ => {
@@ -724,15 +794,45 @@ impl Parser {
         })
     }
 
+    fn parse_argument_list(&mut self) -> Result<Vec<ast::Expression>, ParserError> {
+        self.expect(TokenKind::OpenParen)?;
+
+        let mut args = vec![];
+
+        if !self.peek_token_is(TokenKind::CloseParen) {
+            self.next_token()?;
+            loop {
+                args.push(self.parse_expression(Precedence::Lowest)?);
+
+                if self.peek_token_is(TokenKind::CloseParen) {
+                    self.next_token()?;
+                    break Ok(args);
+                }
+                self.expect_peek(TokenKind::Comma)?;
+                self.next_token()?;
+            }
+        } else {
+            self.next_token()?;
+            Ok(args)
+        }
+    }
+
     fn parse_identifier(&mut self) -> Result<ast::Expression, ParserError> {
         if let TokenKind::Identifier(val) = self.cur_token.kind.clone() {
-            return Ok(ast::Expression::Var(val));
+            match &self.peek_token.kind {
+                TokenKind::OpenParen => {
+                    self.next_token()?;
+                    let args = self.parse_argument_list()?;
+                    Ok(ast::Expression::FunctionCall(val, args))
+                }
+                _ => Ok(ast::Expression::Var(val)),
+            }
+        } else {
+            Err(ParserError::UnexpectedToken {
+                expected: TokenKind::Identifier(String::new()),
+                actual: self.cur_token.kind.clone(),
+            })
         }
-
-        Err(ParserError::UnexpectedToken {
-            expected: TokenKind::Identifier(String::new()),
-            actual: self.cur_token.kind.clone(),
-        })
     }
 
     fn parse_unary(&mut self) -> Result<ast::Expression, ParserError> {
@@ -821,17 +921,17 @@ mod tests {
         let program = parser.parse_program().expect("should successfully parse");
 
         assert_eq!(
-            program.function_definition.body,
-            ast::Block(vec![
-                ast::BlockItem::D(ast::Declaration {
+            program.function_declrations[0].body,
+            Some(ast::Block(vec![
+                ast::BlockItem::D(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: "a".to_owned(),
                     exp: Some(ast::Expression::Var("hello".to_owned()))
-                }),
-                ast::BlockItem::D(ast::Declaration {
+                })),
+                ast::BlockItem::D(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: "b".to_owned(),
                     exp: None,
-                }),
-            ])
+                })),
+            ]))
         );
     }
 
@@ -850,10 +950,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_definition.body,
-            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
+            program.function_declrations[0].body,
+            Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -862,7 +962,7 @@ mod tests {
                     },),
                     rhs: Box::new(ast::Expression::Constant(2))
                 }
-            ))])
+            ))]))
         );
     }
 
@@ -881,10 +981,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_definition.body,
-            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
+            program.function_declrations[0].body,
+            Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -896,7 +996,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))])
+            ))]))
         );
     }
 
@@ -915,10 +1015,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_definition.body,
-            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
+            program.function_declrations[0].body,
+            Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Unary {
@@ -934,7 +1034,7 @@ mod tests {
                         rhs: Box::new(ast::Expression::Constant(4))
                     })
                 }
-            ))])
+            ))]))
         );
     }
 
@@ -953,10 +1053,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_definition.body,
-            ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
+            program.function_declrations[0].body,
+            Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
                     lhs: Box::new(ast::Expression::Binary {
@@ -969,7 +1069,7 @@ mod tests {
                         expression: Box::new(ast::Expression::Constant(2))
                     })
                 }
-            ))])
+            ))]))
         );
     }
     #[test]
@@ -1003,8 +1103,8 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
-        assert_eq!(program.function_definition.body, expected_result);
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].body, Some(expected_result));
     }
 
     #[test]
@@ -1042,7 +1142,7 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_definition.name, "main".to_owned());
-        assert_eq!(program.function_definition.body, expected_result);
+        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declrations[0].body, Some(expected_result));
     }
 }

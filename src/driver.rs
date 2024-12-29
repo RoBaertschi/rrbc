@@ -125,7 +125,7 @@ impl Options {
             print_help(target);
         }
 
-        if args.len() < 1 || args.len() > 2 {
+        if args.len() < 1 {
             println!("Invalid amount of arguments, expected 1-2 arguments.");
 
             print_help(target);
