@@ -8,7 +8,7 @@ thiserror = "1.0.64"
 
 # For debugging
 [features]
-default = ["emit"]
+default = ["tacky"]
 validate = []
 tacky = ["validate"]
 codegen = ["tacky"]

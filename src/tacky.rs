@@ -1,11 +1,13 @@
+#[cfg(feature = "codegen")]
 use crate::assembly;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Program(pub FunctionDefiniton);
+pub struct Program(pub Vec<FunctionDefiniton>);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FunctionDefiniton {
     pub identifier: String,
+    pub params: Vec<String>,
     pub body: Vec<Instruction>,
 }
 
@@ -27,7 +29,6 @@ pub enum Instruction {
         dst: Var,
     },
     /// src, dst
-    /// We don't use structure because they can't be matched in match unlike these here.
     Copy(Value, Value),
     /// Label to jump to.
     Jump(String),
@@ -37,6 +38,11 @@ pub enum Instruction {
     JumpIfNotZero(Value, String),
     /// Identifier
     Label(String),
+    FunCall {
+        fun_name: String,
+        args: Vec<Value>,
+        dst: Var,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -46,6 +52,7 @@ pub enum Value {
 }
 
 impl Value {
+    #[cfg(feature = "codegen")]
     pub fn to_operand(&self) -> assembly::Operand {
         match self {
             Value::Constant(val) => assembly::Operand::Imm(*val),
@@ -82,6 +89,7 @@ pub enum UnaryOperator {
 }
 
 impl UnaryOperator {
+    #[cfg(feature = "codegen")]
     pub fn to_assembly(&self) -> assembly::UnaryOperator {
         match self {
             UnaryOperator::Complement => assembly::UnaryOperator::Not,

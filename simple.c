@@ -15,5 +15,3 @@ int main(void) {
     }
     return ret == 150000000;
 }
-
-foo

@@ -25,7 +25,10 @@ use crate::semantic_analysis::{
 };
 
 #[cfg(feature = "codegen")]
-use crate::{assembly, codegen, emit::EmitAsm};
+use crate::{assembly, codegen};
+
+#[cfg(feature = "emit")]
+use crate::emit::EmitAsm;
 
 #[cfg(feature = "tacky")]
 use crate::{tackler, tacky};
@@ -407,14 +410,19 @@ pub fn run() -> Result<(), DriverExecutionError> {
                     return Ok(());
                 }
 
-                let program = opts.run_code_gen(program)?;
+                #[cfg(feature = "codegen")]
+                {
+                    let program = opts.run_code_gen(program)?;
 
-                if let Stage::Codegen = opts.stage {
-                    return Ok(());
+                    if let Stage::Codegen = opts.stage {
+                        return Ok(());
+                    }
+                    #[cfg(feature = "emit")]
+                    {
+                        opts.run_assembly_emission(program, &file_set)?;
+                        assembly_output_files.push(file_set.output_file);
+                    }
                 }
-
-                opts.run_assembly_emission(program, &file_set)?;
-                assembly_output_files.push(file_set.output_file);
             }
         }
     }
