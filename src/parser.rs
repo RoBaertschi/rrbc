@@ -255,7 +255,7 @@ impl Parser {
         }
 
         Ok(ast::Program {
-            function_declrations: funcs,
+            function_declarations: funcs,
         })
     }
 
@@ -921,7 +921,7 @@ mod tests {
         let program = parser.parse_program().expect("should successfully parse");
 
         assert_eq!(
-            program.function_declrations[0].body,
+            program.function_declarations[0].body,
             Some(ast::Block(vec![
                 ast::BlockItem::D(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: "a".to_owned(),
@@ -950,9 +950,9 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_declrations[0].body,
+            program.function_declarations[0].body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -981,9 +981,9 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_declrations[0].body,
+            program.function_declarations[0].body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1015,9 +1015,9 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_declrations[0].body,
+            program.function_declarations[0].body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1053,9 +1053,9 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
         assert_eq!(
-            program.function_declrations[0].body,
+            program.function_declarations[0].body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1103,8 +1103,8 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
-        assert_eq!(program.function_declrations[0].body, Some(expected_result));
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].body, Some(expected_result));
     }
 
     #[test]
@@ -1142,7 +1142,7 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_declrations[0].name, "main".to_owned());
-        assert_eq!(program.function_declrations[0].body, Some(expected_result));
+        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        assert_eq!(program.function_declarations[0].body, Some(expected_result));
     }
 }

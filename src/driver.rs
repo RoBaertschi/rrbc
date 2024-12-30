@@ -17,10 +17,11 @@ use crate::{
 
 #[cfg(feature = "validate")]
 use crate::semantic_analysis::{
+    identifier_resolution::{self, IdentifierResolutionError},
     label_resolution::LabelResolutionError,
     loop_labeling::LoopLabelingError,
     switch_resolution::SwitchResolutionError,
-    variable_resolution::{self, VariableResolutionError},
+    type_checking::TypeCheckingError,
 };
 
 #[cfg(feature = "codegen")]
@@ -48,7 +49,7 @@ pub enum DriverExecutionError {
     Parser(#[from] ParserError),
     #[cfg(feature = "validate")]
     #[error("{0}")]
-    VariableResolutionError(#[from] VariableResolutionError),
+    VariableResolutionError(#[from] IdentifierResolutionError),
     #[cfg(feature = "validate")]
     #[error("{0}")]
     LabelResolutionError(#[from] LabelResolutionError),
@@ -58,6 +59,9 @@ pub enum DriverExecutionError {
     #[cfg(feature = "validate")]
     #[error("{0}")]
     SwitchResolutionError(#[from] SwitchResolutionError),
+    #[cfg(feature = "validate")]
+    #[error("{0}")]
+    TypeCheckingError(#[from] TypeCheckingError),
 }
 
 #[derive(Default)]
@@ -307,12 +311,16 @@ impl Options {
         &mut self,
         program: ast::Program,
     ) -> Result<ast::Program, DriverExecutionError> {
-        use crate::semantic_analysis::{label_resolution, loop_labeling, switch_resolution};
+        use crate::semantic_analysis::{
+            label_resolution, loop_labeling, switch_resolution, type_checking,
+        };
 
+        let program = identifier_resolution::resolve_program(program)?;
+        let (program, _symbols) = type_checking::typecheck_program(program)?;
         let program = label_resolution::resolve_program(program)?;
         let program = loop_labeling::label_program(program)?;
         let program = switch_resolution::resolve_program(program)?;
-        Ok(variable_resolution::resolve_program(program)?)
+        Ok(program)
     }
 
     /// Runs the code gen without creating the file.

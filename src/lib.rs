@@ -14,4 +14,7 @@ pub mod semantic_analysis;
 pub mod tackler;
 #[cfg(feature = "tacky")]
 pub mod tacky;
+#[cfg(feature = "validate")]
+pub mod types;
 pub mod unique_id;
+pub mod utils;

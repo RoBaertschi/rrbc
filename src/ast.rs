@@ -227,5 +227,5 @@ pub struct FunctionDeclaration {
 
 #[derive(Debug)]
 pub struct Program {
-    pub function_declrations: Vec<FunctionDeclaration>,
+    pub function_declarations: Vec<FunctionDeclaration>,
 }

@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::{
     ast::{Block, BlockItem, Expression, FunctionDeclaration, Program, Statement},
     unique_id,
+    utils::ResultOkMap,
 };
 
 #[derive(Debug, Error)]
@@ -20,20 +21,28 @@ pub enum SwitchResolutionError {
 }
 
 pub fn resolve_program(program: Program) -> Result<Program, SwitchResolutionError> {
-    let function_definition = resolve_function_definition(program.function_definition)?;
+    let mut new_funcs = vec![];
+
+    for func in program.function_declarations {
+        new_funcs.push(resolve_function_declaration(func)?);
+    }
+
     Ok(Program {
-        function_definition,
+        function_declarations: new_funcs,
     })
 }
 
-fn resolve_function_definition(
+fn resolve_function_declaration(
     function: FunctionDeclaration,
 ) -> Result<FunctionDeclaration, SwitchResolutionError> {
     let mut data = None;
-    let body = resolve_block(function.body, &mut data)?;
+    let body = function
+        .body
+        .ok_map(|body| resolve_block(body, &mut data))?;
     Ok(FunctionDeclaration {
         name: function.name,
         body,
+        params: function.params,
     })
 }
 

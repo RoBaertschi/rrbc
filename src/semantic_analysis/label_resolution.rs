@@ -23,8 +23,14 @@ pub enum LabelResolutionError {
 }
 
 pub fn resolve_program(program: Program) -> Result<Program, LabelResolutionError> {
+    let mut new_funcs = vec![];
+
+    for func in program.function_declarations {
+        new_funcs.push(resolve_function(func)?);
+    }
+
     Ok(Program {
-        function_definition: resolve_function(program.function_definition)?,
+        function_declarations: new_funcs,
     })
 }
 
@@ -36,11 +42,17 @@ pub fn resolve_function(
         function_name: function.name,
     };
 
-    let mut body = find_label_resolve_block(&mut state, function.body)?;
-    body = resolve_block(&mut state, body)?;
+    let body = match function.body {
+        Some(body) => Some(
+            find_label_resolve_block(&mut state, body)
+                .and_then(|ok| resolve_block(&mut state, ok))?,
+        ),
+        None => None,
+    };
 
     Ok(FunctionDeclaration {
         name: state.function_name,
+        params: function.params,
         body,
     })
 }
