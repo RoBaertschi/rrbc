@@ -10,7 +10,7 @@ pub fn run_third_pass(program: Program, stack_offset: HashMap<String, usize>) ->
             .0
             .into_iter()
             .map(|func| {
-                let offset = stack_offset.get(&func.name).map(|o| *o).unwrap_or(0_usize);
+                let offset = stack_offset.get(&func.name).copied().unwrap_or(0_usize);
                 function(func, offset)
             })
             .collect(),

@@ -2,7 +2,7 @@ use std::{
     env::{self, Args},
     fs,
     io::{self},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{self, ChildStderr, ChildStdout, Command},
     str::FromStr,
 };
@@ -198,7 +198,7 @@ impl Options {
             print_help(target);
         }
 
-        if let None = output_path {
+        if output_path.is_none() {
             if file_paths.len() == 1 {
                 let mut output = file_paths[0].clone();
                 match program_type {
@@ -252,8 +252,8 @@ impl Options {
 
     pub fn run_assembler(
         &self,
-        input_files: &Vec<PathBuf>,
-        output_file: &PathBuf,
+        input_files: &[PathBuf],
+        output_file: &Path,
     ) -> Result<(), DriverExecutionError> {
         let mut command = Command::new("gcc")
             .args(input_files.iter().map(|file| file.as_os_str()))

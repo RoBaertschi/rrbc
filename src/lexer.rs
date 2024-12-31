@@ -148,10 +148,7 @@ impl Lexer {
     }
 
     fn is_digit(&self) -> bool {
-        match self.ch {
-            '0'..='9' => true,
-            _ => false,
-        }
+        self.ch.is_ascii_digit()
     }
 
     fn is_valid_identifier_char(&self) -> bool {
@@ -358,12 +355,12 @@ impl Lexer {
             }
             _ => {
                 if self.is_digit() {
-                    return Ok(self.read_constant()?);
+                    return self.read_constant();
                 } else if self.is_valid_identifier_char() {
                     return Ok(self.read_identifier());
                 }
 
-                return Err(LexerError::UnknownCharacter(char::from(self.ch)));
+                return Err(LexerError::UnknownCharacter(self.ch));
             }
         };
 
@@ -375,7 +372,7 @@ impl Lexer {
     }
 }
 
-impl<'a> Iterator for Lexer {
+impl Iterator for Lexer {
     type Item = Result<Token, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -387,7 +384,7 @@ impl<'a> Iterator for Lexer {
             }
         }
 
-        return Some(token);
+        Some(token)
     }
 }
 

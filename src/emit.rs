@@ -209,9 +209,10 @@ impl EmitAsm for FunctionDefinition {
         let start = format!("{}pushq %rbp\n{}movq %rsp, %rbp", tabs, tabs);
 
         format!(
-            "# {:?}\n{}\n{}:\n{}\n{}\n# End function\n",
+            "# {:?}\n{}.globl {}\n{}:\n{}\n{}\n# End function\n",
             self,
-            format!("{}.globl {}", tabs, self.name),
+            tabs,
+            self.name,
             if OS == "macos" {
                 format!("_{}", self.name)
             } else {

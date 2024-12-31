@@ -82,23 +82,20 @@ impl SecondPass {
     }
 
     fn pseudo_to_stack(&mut self, operand: &mut assembly::Operand) {
-        match operand {
-            assembly::Operand::Pseudo(ident) => {
-                *operand = assembly::Operand::Stack(
-                    *self
-                        .offest_to_identifier
-                        .entry(ident.clone())
-                        .or_insert_with(|| {
-                            let stack_offset = self
-                                .stack_offset
-                                .entry(self.current_function.clone())
-                                .or_insert(0_usize);
-                            *stack_offset += 4;
-                            *stack_offset
-                        }),
-                )
-            }
-            _ => {}
+        if let assembly::Operand::Pseudo(ident) = operand {
+            *operand = assembly::Operand::Stack(
+                *self
+                    .offest_to_identifier
+                    .entry(ident.clone())
+                    .or_insert_with(|| {
+                        let stack_offset = self
+                            .stack_offset
+                            .entry(self.current_function.clone())
+                            .or_insert(0_usize);
+                        *stack_offset += 4;
+                        *stack_offset
+                    }),
+            )
         }
     }
 }

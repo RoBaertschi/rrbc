@@ -329,7 +329,7 @@ impl Parser {
             }
             TokenKind::KWInt => {
                 let mut params = vec![];
-                while &self.cur_token.kind != &TokenKind::CloseParen {
+                while self.cur_token.kind != TokenKind::CloseParen {
                     self.expect_peek(TokenKind::Identifier(String::new()))?;
                     let ident = match &self.cur_token.kind {
                         TokenKind::Identifier(content) => content.clone(),
@@ -418,7 +418,7 @@ impl Parser {
                 }
                 TokenKind::OpenParen => self
                     .parse_function_declaration(ident)
-                    .map(|ok| ast::Declaration::FunDecl(ok)),
+                    .map(ast::Declaration::FunDecl),
                 tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
                     tok.clone(),
                 )),
@@ -698,7 +698,7 @@ impl Parser {
                 left_exp = postfix(self, left_exp)?;
             }
         }
-        return Ok(left_exp);
+        Ok(left_exp)
     }
 
     fn parse_binary_expression(

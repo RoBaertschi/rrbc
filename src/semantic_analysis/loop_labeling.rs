@@ -31,7 +31,7 @@ fn label_function_definition(
     Ok(FunctionDeclaration {
         name: function.name,
         body: function.body.map_or(Ok(None), |some| {
-            label_block(some, None, None).map(|ok| Some(ok))
+            label_block(some, None, None).map(Some)
         })?,
         params: function.params,
     })

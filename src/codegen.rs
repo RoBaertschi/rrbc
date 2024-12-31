@@ -7,8 +7,8 @@ pub mod tacky_to_assembly;
 pub fn code_generation(program: tacky::Program) -> assembly::Program {
     let program = tacky_to_assembly::code_generation(program);
     let (program, stack_offset) = replace_pseudo::run_second_pass(program);
-    let program = fixup_instructions::run_third_pass(program, stack_offset);
-    program
+    
+    fixup_instructions::run_third_pass(program, stack_offset)
 }
 
 #[cfg(test)]
