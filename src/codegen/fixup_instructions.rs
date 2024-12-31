@@ -1,16 +1,29 @@
+use std::collections::HashMap;
+
 use crate::assembly::{
     BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register,
 };
 
-pub fn run_third_pass(program: Program, stack_offset: u32) -> Program {
-    Program(function(program.0, stack_offset))
+pub fn run_third_pass(program: Program, stack_offset: HashMap<String, usize>) -> Program {
+    Program(
+        program
+            .0
+            .into_iter()
+            .map(|func| {
+                let offset = stack_offset.get(&func.name).map(|o| *o).unwrap_or(0_usize);
+                function(func, offset)
+            })
+            .collect(),
+    )
 }
 
-fn function(func: FunctionDefinition, stack_offset: u32) -> FunctionDefinition {
+fn function(func: FunctionDefinition, stack_offset: usize) -> FunctionDefinition {
     let mut new_instructions = vec![];
 
     if stack_offset > 0 {
-        new_instructions.push(Instruction::AllocateStack(stack_offset));
+        let padding = 16 - (stack_offset % 16); // 24 % 16 == 8; 16 - 8 == 8; stack_offset + 8 ==
+                                                // 32
+        new_instructions.push(Instruction::AllocateStack(stack_offset + padding));
     }
 
     new_instructions.append(&mut instructions(func.instructions));

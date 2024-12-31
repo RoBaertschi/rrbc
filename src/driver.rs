@@ -21,6 +21,7 @@ use crate::semantic_analysis::{
     label_resolution::LabelResolutionError,
     loop_labeling::LoopLabelingError,
     switch_resolution::SwitchResolutionError,
+    type_checking::Symbols,
     type_checking::TypeCheckingError,
 };
 
@@ -313,17 +314,18 @@ impl Options {
     pub fn run_validator(
         &mut self,
         program: ast::Program,
-    ) -> Result<ast::Program, DriverExecutionError> {
+    ) -> Result<(ast::Program, Symbols), DriverExecutionError> {
         use crate::semantic_analysis::{
-            label_resolution, loop_labeling, switch_resolution, type_checking,
+            label_resolution, loop_labeling, switch_resolution,
+            type_checking::{self},
         };
 
         let program = identifier_resolution::resolve_program(program)?;
-        let (program, _symbols) = type_checking::typecheck_program(program)?;
+        let (program, symbols) = type_checking::typecheck_program(program)?;
         let program = label_resolution::resolve_program(program)?;
         let program = loop_labeling::label_program(program)?;
         let program = switch_resolution::resolve_program(program)?;
-        Ok(program)
+        Ok((program, symbols))
     }
 
     /// Runs the code gen without creating the file.
@@ -346,8 +348,9 @@ impl Options {
         &self,
         program: assembly::Program,
         file_set: &FileSet,
+        symbols: Symbols,
     ) -> Result<(), DriverExecutionError> {
-        fs::write(&file_set.output_file, program.emit(0))?;
+        fs::write(&file_set.output_file, program.emit(0, &symbols))?;
 
         Ok(())
     }
@@ -385,7 +388,7 @@ pub fn run() -> Result<(), DriverExecutionError> {
             return Ok(());
         }
 
-        let mut program = opts.run_parser()?;
+        let program = opts.run_parser()?;
 
         if let Stage::Parse = opts.stage {
             println!("{:?}", program);
@@ -394,7 +397,7 @@ pub fn run() -> Result<(), DriverExecutionError> {
 
         #[cfg(feature = "validate")]
         {
-            program = opts.run_validator(program)?;
+            let (program, symbols) = opts.run_validator(program)?;
             _ = program;
 
             if let Stage::Validate = opts.stage {
@@ -419,7 +422,7 @@ pub fn run() -> Result<(), DriverExecutionError> {
                     }
                     #[cfg(feature = "emit")]
                     {
-                        opts.run_assembly_emission(program, &file_set)?;
+                        opts.run_assembly_emission(program, &file_set, symbols)?;
                         assembly_output_files.push(file_set.output_file);
                     }
                 }
