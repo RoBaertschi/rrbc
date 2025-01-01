@@ -19,8 +19,6 @@ const ARG_REGISTERS: [Register; 6] = [
 pub(super) fn cg_function(func: tacky::FunctionDefiniton) -> assembly::FunctionDefinition {
     let mut asm_insts: Vec<assembly::Instruction> = vec![];
 
-    let mut current_stack_offset = 16;
-
     for (i, param) in func.params.into_iter().enumerate() {
         if i < ARG_REGISTERS.len() {
             asm_insts.push(assembly::Instruction::Mov {
@@ -29,10 +27,11 @@ pub(super) fn cg_function(func: tacky::FunctionDefiniton) -> assembly::FunctionD
             });
         } else {
             asm_insts.push(assembly::Instruction::Mov {
-                src: Operand::Stack(current_stack_offset),
+                src: Operand::Stack(16_i64 + (8_i64 * <usize as TryInto<i64>>
+                    ::try_into(i - ARG_REGISTERS.len())
+                    .expect("Stack has grown to big to fit into a i64, this is highly unlikely, if this happens to you please open an issue"))),
                 dst: Operand::Pseudo(param),
             });
-            current_stack_offset += 8;
         }
     }
 

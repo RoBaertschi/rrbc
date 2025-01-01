@@ -1,32 +1,38 @@
 use std::collections::HashMap;
 
-use crate::assembly::{
-    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register,
+use crate::{
+    assembly::{BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register},
+    utils,
 };
 
-pub fn run_third_pass(program: Program, stack_offset: HashMap<String, usize>) -> Program {
+pub fn run_third_pass(program: Program, stack_offset: HashMap<String, i64>) -> Program {
     Program(
         program
             .0
             .into_iter()
             .map(|func| {
-                let offset = stack_offset.get(&func.name).copied().unwrap_or(0_usize);
-                function(func, offset)
+                let offset = stack_offset.get(&func.name).copied().unwrap_or(0);
+                fixup_function(func, offset)
             })
             .collect(),
     )
 }
 
-fn function(func: FunctionDefinition, stack_offset: usize) -> FunctionDefinition {
-    let mut new_instructions = vec![];
+fn fixup_function(func: FunctionDefinition, stack_offset: i64) -> FunctionDefinition {
+    let stack_bytes = -stack_offset;
 
-    if stack_offset > 0 {
-        let padding = 16 - (stack_offset % 16); // 24 % 16 == 8; 16 - 8 == 8; stack_offset + 8 ==
-                                                // 32
-        new_instructions.push(Instruction::AllocateStack(stack_offset + padding));
-    }
+    let mut new_instructions = if stack_offset != 0 {
+        vec![Instruction::AllocateStack(
+            // TODO(Robin): Fix this one day correctly
+            utils::round_away_from_zero(16, stack_bytes)
+                .try_into()
+                .unwrap_or_else(|_err| (-stack_bytes).try_into().unwrap_or(0)),
+        )]
+    } else {
+        vec![]
+    };
 
-    new_instructions.append(&mut instructions(func.instructions));
+    new_instructions.append(&mut fixup_instructions(func.instructions));
 
     FunctionDefinition {
         name: func.name,
@@ -34,7 +40,7 @@ fn function(func: FunctionDefinition, stack_offset: usize) -> FunctionDefinition
     }
 }
 
-fn instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
+fn fixup_instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
     let mut new_instructions = vec![];
 
     for inst in instructions {
@@ -200,7 +206,7 @@ mod tests {
                 dst: Operand::Stack(8),
             },
         ];
-        let output = instructions(input_instructions);
+        let output = fixup_instructions(input_instructions);
 
         assert_eq!(expected_instructions.len(), output.len());
 

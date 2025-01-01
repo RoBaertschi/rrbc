@@ -55,7 +55,7 @@ pub enum Operand {
     Register(Register),
     Imm(i32),
     Pseudo(String),
-    Stack(usize),
+    Stack(i64),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

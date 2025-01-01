@@ -24,3 +24,11 @@ impl<T> ResultOkMap<T> for Option<T> {
         self.map(f).ok()
     }
 }
+
+pub fn round_away_from_zero(step: i64, num: i64) -> i64 {
+    if num > 0 {
+        num + (step - (num % step))
+    } else {
+        num - (step - (num % step))
+    }
+}

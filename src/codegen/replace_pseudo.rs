@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::assembly::{self, FunctionDefinition, Instruction, Program};
 
-pub fn run_second_pass(program: Program) -> (Program, HashMap<String, usize>) {
+pub fn run_second_pass(program: Program) -> (Program, HashMap<String, i64>) {
     SecondPass {
         offest_to_identifier: HashMap::new(),
         stack_offset: HashMap::new(),
@@ -12,13 +12,13 @@ pub fn run_second_pass(program: Program) -> (Program, HashMap<String, usize>) {
 }
 
 struct SecondPass {
-    offest_to_identifier: HashMap<String, usize>,
-    stack_offset: HashMap<String, usize>,
+    offest_to_identifier: HashMap<String, i64>,
+    stack_offset: HashMap<String, i64>,
     current_function: String,
 }
 
 impl SecondPass {
-    pub fn gen(mut self, program: assembly::Program) -> (Program, HashMap<String, usize>) {
+    pub fn gen(mut self, program: assembly::Program) -> (Program, HashMap<String, i64>) {
         (
             Program(
                 program
@@ -91,8 +91,8 @@ impl SecondPass {
                         let stack_offset = self
                             .stack_offset
                             .entry(self.current_function.clone())
-                            .or_insert(0_usize);
-                        *stack_offset += 4;
+                            .or_insert(0);
+                        *stack_offset -= 4;
                         *stack_offset
                     }),
             )

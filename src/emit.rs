@@ -72,7 +72,7 @@ impl Operand {
                     }),
             Operand::Imm(val) => format!("${}", val),
             Operand::Pseudo(_) => unreachable!("got a unexpected Operand::Pseudo, this should not happen and indicates a bug in the third codegen pass"),
-            Operand::Stack(stack) => format!("{}(%rbp)", -(*stack as i64)),
+            Operand::Stack(stack) => format!("{}(%rbp)", *stack ),
         }
     }
 }
@@ -141,13 +141,14 @@ impl EmitAsm for Instruction {
                 operand.emit_size(RegisterSize::One)
             ),
             Instruction::Label(label) => format!(".L{}:\n", label),
-            Instruction::DeallocateStack(_) => todo!(),
+            Instruction::DeallocateStack(amount) => format!("{}addq ${}, %rsp\n", tabs, *amount),
             Instruction::Push(operand) => {
-                format!("pushq {}\n", operand.emit_size(RegisterSize::Eight))
+                format!("{}pushq {}\n", tabs, operand.emit_size(RegisterSize::Eight))
             }
             Instruction::Call(ident) => {
                 format!(
-                    "call {ident}{}",
+                    "{}call {ident}{}\n",
+                    tabs,
                     if OS == "linux" {
                         if symbols.get(ident).map(|sym| sym.1).unwrap_or(false) {
                             ""

@@ -163,6 +163,9 @@ impl Options {
                 goal = found_goal;
                 continue;
             }
+            if &arg == "--help" {
+                print_help(target);
+            }
             if &arg == "-c" {
                 program_type = ProgramType::ObjectFile;
                 continue;

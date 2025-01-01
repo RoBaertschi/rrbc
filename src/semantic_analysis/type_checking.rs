@@ -195,7 +195,7 @@ fn typecheck_statement(
             body,
             condition,
             label,
-        } => Statement::While {
+        } => Statement::DoWhile {
             body: Box::new(typecheck_statement(*body, symbols)?),
             condition: typecheck_expression(condition, symbols)?,
             label,
