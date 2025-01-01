@@ -3,7 +3,7 @@ use std::collections::HashMap;
 #[cfg(feature = "tacky")]
 use crate::tacky;
 
-type Identifier = String;
+pub type Identifier = String;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum Expression {
@@ -29,6 +29,7 @@ pub enum Expression {
         r#else: Box<Expression>,
     },
     Postfix(PostfixOperator, Box<Expression>),
+    FunctionCall(Identifier, Vec<Expression>),
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -189,15 +190,21 @@ pub enum Statement {
     Null,
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ForInit {
-    InitDecl(Declaration),
+    InitDecl(VariableDeclaration),
     InitExp(Expression),
     None,
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Declaration {
+#[derive(Debug, Eq, PartialEq)]
+pub enum Declaration {
+    FunDecl(FunctionDeclaration),
+    VarDecl(VariableDeclaration),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct VariableDeclaration {
     pub name: Identifier,
     pub exp: Option<Expression>,
 }
@@ -211,13 +218,14 @@ pub enum BlockItem {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Block(pub Vec<BlockItem>);
 
-#[derive(Debug)]
-pub struct FunctionDefinition {
+#[derive(Debug, Eq, PartialEq)]
+pub struct FunctionDeclaration {
     pub name: Identifier,
-    pub body: Block,
+    pub params: Vec<Identifier>,
+    pub body: Option<Block>,
 }
 
 #[derive(Debug)]
 pub struct Program {
-    pub function_definition: FunctionDefinition,
+    pub function_declarations: Vec<FunctionDeclaration>,
 }

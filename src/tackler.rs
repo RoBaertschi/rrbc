@@ -201,6 +201,26 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
 
             (instructions, dst)
         }
+        ast::Expression::FunctionCall(ident, args) => {
+            let mut values = vec![];
+            let mut instructions = vec![];
+
+            for arg in args {
+                let (mut arg_instructions, value) = emit_tacky_expression(arg);
+                values.push(value);
+                instructions.append(&mut arg_instructions);
+            }
+
+            let dst = Var(unique_id::temp_variable_name());
+
+            instructions.push(Instruction::FunCall {
+                fun_name: ident,
+                args: values,
+                dst: dst.clone(),
+            });
+
+            (instructions, Value::Var(dst))
+        }
     }
 }
 
@@ -373,7 +393,7 @@ pub fn emit_tacky_statement(stmt: ast::Statement) -> Vec<Instruction> {
 
 pub fn emit_tacky_for_init(for_init: ast::ForInit) -> Vec<Instruction> {
     match for_init {
-        ast::ForInit::InitDecl(decl) => emit_tacky_declaration(decl),
+        ast::ForInit::InitDecl(decl) => emit_tacky_variable_declaration(decl),
         ast::ForInit::InitExp(expr) => emit_tacky_expression(expr).0,
         ast::ForInit::None => vec![],
     }
@@ -388,6 +408,15 @@ pub fn emit_tacky_block(block: ast::Block) -> Vec<Instruction> {
 }
 
 pub fn emit_tacky_declaration(declaration: ast::Declaration) -> Vec<Instruction> {
+    match declaration {
+        ast::Declaration::FunDecl(_) => vec![],
+        ast::Declaration::VarDecl(variable_declaration) => {
+            emit_tacky_variable_declaration(variable_declaration)
+        }
+    }
+}
+
+pub fn emit_tacky_variable_declaration(declaration: ast::VariableDeclaration) -> Vec<Instruction> {
     if let Some(expr) = declaration.exp {
         let (mut instructions, value) = emit_tacky_expression(expr);
         instructions.append(&mut vec![Instruction::Copy(
@@ -407,21 +436,36 @@ pub fn emit_tacky_block_item(block_item: ast::BlockItem) -> Vec<Instruction> {
     }
 }
 
-pub fn emit_tacky_function(func: ast::FunctionDefinition) -> FunctionDefiniton {
-    let mut body = vec![];
+pub fn emit_tacky_function(func: ast::FunctionDeclaration) -> Option<FunctionDefiniton> {
+    match func.body {
+        Some(f_body) => {
+            let mut body = vec![];
 
-    body.append(&mut emit_tacky_block(func.body));
+            body.append(&mut emit_tacky_block(f_body));
 
-    body.append(&mut vec![Instruction::Return(Value::Constant(0))]);
+            body.append(&mut vec![Instruction::Return(Value::Constant(0))]);
 
-    FunctionDefiniton {
-        identifier: func.name,
-        body,
+            Some(FunctionDefiniton {
+                identifier: func.name,
+                body,
+                params: func.params,
+            })
+        }
+        None => None,
     }
 }
 
 pub fn emit_tacky_program(program: ast::Program) -> Program {
-    Program(emit_tacky_function(program.function_definition))
+    let mut funcs = vec![];
+
+    for func in program.function_declarations {
+        let func = emit_tacky_function(func);
+        if let Some(func) = func {
+            funcs.push(func);
+        }
+    }
+
+    Program(funcs)
 }
 
 #[cfg(test)]
@@ -456,11 +500,12 @@ mod tests {
                 dst: Var("tmp.0".to_owned()),
             },
             Instruction::Return(Value::Var(Var("tmp.0".to_owned()))),
+            Instruction::Return(Value::Constant(0)),
         ];
 
-        assert_eq!(expected.len(), program.0.body.len());
+        assert_eq!(expected.len(), program.0[0].body.len());
 
-        for pair in expected.iter().zip(program.0.body.iter()) {
+        for pair in expected.iter().zip(program.0[0].body.iter()) {
             assert_eq!(pair.0, pair.1);
         }
     }

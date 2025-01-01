@@ -1,14 +1,39 @@
 use crate::{
     assembly::{self, CondCode, Instruction, Operand, Register},
-    tacky::{self, UnaryOperator},
+    tacky::{self, UnaryOperator, Value},
 };
 
 pub(super) fn code_generation(program: tacky::Program) -> assembly::Program {
-    assembly::Program(cg_function(program.0))
+    assembly::Program(program.0.into_iter().map(cg_function).collect())
 }
+
+const ARG_REGISTERS: [Register; 6] = [
+    Register::DI,
+    Register::SI,
+    Register::DX,
+    Register::CX,
+    Register::R8,
+    Register::R9,
+];
 
 pub(super) fn cg_function(func: tacky::FunctionDefiniton) -> assembly::FunctionDefinition {
     let mut asm_insts: Vec<assembly::Instruction> = vec![];
+
+    for (i, param) in func.params.into_iter().enumerate() {
+        if i < ARG_REGISTERS.len() {
+            asm_insts.push(assembly::Instruction::Mov {
+                src: Operand::Register(ARG_REGISTERS[i]),
+                dst: Operand::Pseudo(param),
+            });
+        } else {
+            asm_insts.push(assembly::Instruction::Mov {
+                src: Operand::Stack(16_i64 + (8_i64 * <usize as TryInto<i64>>
+                    ::try_into(i - ARG_REGISTERS.len())
+                    .expect("Stack has grown to big to fit into a i64, this is highly unlikely, if this happens to you please open an issue"))),
+                dst: Operand::Pseudo(param),
+            });
+        }
+    }
 
     for inst in func.body {
         asm_insts.append(&mut cg_instruction(inst));
@@ -172,5 +197,60 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         }],
         tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label)],
         tacky::Instruction::Label(label) => vec![Instruction::Label(label)],
+        tacky::Instruction::FunCall {
+            fun_name,
+            args,
+            dst,
+        } => {
+            let (register_args, stack_args) = args
+                .split_at_checked(ARG_REGISTERS.len())
+                .unwrap_or((&args, &[]));
+
+            let stack_padding: usize = if stack_args.len() % 2 == 0 { 0 } else { 8 };
+            let mut instructions = vec![];
+
+            if stack_padding != 0 {
+                instructions.push(Instruction::AllocateStack(stack_padding));
+            }
+
+            for (i, arg) in register_args.iter().enumerate() {
+                let r = ARG_REGISTERS[i];
+                let assembly_arg = arg.to_operand();
+                instructions.push(Instruction::Mov {
+                    src: assembly_arg,
+                    dst: Operand::Register(r),
+                });
+            }
+
+            for arg in stack_args.iter().rev() {
+                let assembly_arg = arg.to_operand();
+                match assembly_arg {
+                    arg @ (Operand::Register(_) | Operand::Imm(_)) => {
+                        instructions.push(Instruction::Push(arg))
+                    }
+                    arg @ (Operand::Pseudo(_) | Operand::Stack(_)) => {
+                        instructions.push(Instruction::Mov {
+                            src: arg,
+                            dst: Operand::Register(Register::AX),
+                        });
+                        instructions.push(Instruction::Push(Operand::Register(Register::AX)));
+                    }
+                }
+            }
+
+            instructions.push(Instruction::Call(fun_name));
+            let bytes_to_remove = 8 * stack_args.len() + stack_padding;
+            if bytes_to_remove != 0 {
+                instructions.push(Instruction::DeallocateStack(bytes_to_remove));
+            }
+
+            let assembly_dst = Value::Var(dst).to_operand();
+            instructions.push(Instruction::Mov {
+                src: Operand::Register(Register::AX),
+                dst: assembly_dst,
+            });
+
+            instructions
+        }
     }
 }

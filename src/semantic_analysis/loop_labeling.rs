@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    ast::{Block, BlockItem, FunctionDefinition, Program, Statement},
+    ast::{Block, BlockItem, FunctionDeclaration, Program, Statement},
     unique_id,
 };
 
@@ -14,20 +14,26 @@ pub enum LoopLabelingError {
 }
 
 pub fn label_program(program: Program) -> Result<Program, LoopLabelingError> {
-    let function = label_function_definition(program.function_definition)?;
+    let mut new_funcs = vec![];
+
+    for func in program.function_declarations {
+        new_funcs.push(label_function_definition(func)?);
+    }
 
     Ok(Program {
-        function_definition: function,
+        function_declarations: new_funcs,
     })
 }
 
 fn label_function_definition(
-    function: FunctionDefinition,
-) -> Result<FunctionDefinition, LoopLabelingError> {
-    let body = label_block(function.body, None, None)?;
-    Ok(FunctionDefinition {
+    function: FunctionDeclaration,
+) -> Result<FunctionDeclaration, LoopLabelingError> {
+    Ok(FunctionDeclaration {
         name: function.name,
-        body,
+        body: function.body.map_or(Ok(None), |some| {
+            label_block(some, None, None).map(Some)
+        })?,
+        params: function.params,
     })
 }
 

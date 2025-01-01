@@ -1,15 +1,7 @@
 int main(void) {
-    int value = 7;
-
-    switch (value) {
-    case 4:
-        return 4;
-    case 5:
+    int a = 10;
+    do
         break;
-    case 0:
-        return 0;
-    default:
-        return 255;
-    }
-    return 1;
+    while ((a = 1));
+    return a;
 }

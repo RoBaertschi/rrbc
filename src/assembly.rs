@@ -1,3 +1,5 @@
+//! amd64 assembly
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instruction {
     Mov {
@@ -23,7 +25,10 @@ pub enum Instruction {
     JumpCC(CondCode, String),
     SetCC(CondCode, Operand),
     Label(String),
-    AllocateStack(u32),
+    AllocateStack(usize),
+    DeallocateStack(usize),
+    Push(Operand),
+    Call(String),
     Ret,
 }
 
@@ -50,14 +55,18 @@ pub enum Operand {
     Register(Register),
     Imm(i32),
     Pseudo(String),
-    Stack(u32),
+    Stack(i64),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum Register {
-    CX,
     AX,
+    CX,
     DX,
+    DI,
+    SI,
+    R8,
+    R9,
     R10,
     R11,
 }
@@ -74,8 +83,9 @@ pub enum CondCode {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RegisterSize {
-    Lower,
-    All,
+    One,
+    Four,
+    Eight,
 }
 
 #[derive(Debug)]
@@ -85,4 +95,4 @@ pub struct FunctionDefinition {
 }
 
 #[derive(Debug)]
-pub struct Program(pub FunctionDefinition);
+pub struct Program(pub Vec<FunctionDefinition>);
