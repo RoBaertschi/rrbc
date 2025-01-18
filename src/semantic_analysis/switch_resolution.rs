@@ -23,12 +23,12 @@ pub enum SwitchResolutionError {
 pub fn resolve_program(program: Program) -> Result<Program, SwitchResolutionError> {
     let mut new_funcs = vec![];
 
-    for func in program.function_declarations {
+    for func in program.declarations {
         new_funcs.push(resolve_function_declaration(func)?);
     }
 
     Ok(Program {
-        function_declarations: new_funcs,
+        declarations: new_funcs,
     })
 }
 

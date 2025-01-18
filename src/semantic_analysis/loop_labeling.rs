@@ -16,12 +16,12 @@ pub enum LoopLabelingError {
 pub fn label_program(program: Program) -> Result<Program, LoopLabelingError> {
     let mut new_funcs = vec![];
 
-    for func in program.function_declarations {
+    for func in program.declarations {
         new_funcs.push(label_function_definition(func)?);
     }
 
     Ok(Program {
-        function_declarations: new_funcs,
+        declarations: new_funcs,
     })
 }
 
@@ -30,9 +30,9 @@ fn label_function_definition(
 ) -> Result<FunctionDeclaration, LoopLabelingError> {
     Ok(FunctionDeclaration {
         name: function.name,
-        body: function.body.map_or(Ok(None), |some| {
-            label_block(some, None, None).map(Some)
-        })?,
+        body: function
+            .body
+            .map_or(Ok(None), |some| label_block(some, None, None).map(Some))?,
         params: function.params,
     })
 }

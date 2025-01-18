@@ -36,13 +36,13 @@ pub enum TypeCheckingError {
 pub fn typecheck_program(program: Program) -> Result<(Program, Symbols), TypeCheckingError> {
     let mut symbols = Symbols::new();
     let mut new_funcs = vec![];
-    for func in program.function_declarations {
+    for func in program.declarations {
         new_funcs.push(typecheck_function_declaration(func, &mut symbols)?);
     }
 
     Ok((
         Program {
-            function_declarations: new_funcs,
+            declarations: new_funcs,
         },
         symbols,
     ))
