@@ -15,3 +15,7 @@ codegen = ["tacky"]
 emit = ["codegen"]
 
 [dev-dependencies]
+
+[workspace]
+members = ["parser"]
+
