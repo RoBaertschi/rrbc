@@ -1,9 +1,7 @@
 use thiserror::Error;
 
-use crate::{
-    ast::{Block, BlockItem, FunctionDeclaration, Program, Statement},
-    unique_id,
-};
+use rrbc_parser::ast::{Block, BlockItem, FunctionDeclaration, Program, Statement};
+use rrbc_utils::unique_id;
 
 #[derive(Debug, Error)]
 pub enum LoopLabelingError {
@@ -30,9 +28,9 @@ fn label_function_definition(
 ) -> Result<FunctionDeclaration, LoopLabelingError> {
     Ok(FunctionDeclaration {
         name: function.name,
-        body: function.body.map_or(Ok(None), |some| {
-            label_block(some, None, None).map(Some)
-        })?,
+        body: function
+            .body
+            .map_or(Ok(None), |some| label_block(some, None, None).map(Some))?,
         params: function.params,
     })
 }

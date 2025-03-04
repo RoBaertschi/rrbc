@@ -4,13 +4,11 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::{
-    ast::{
-        Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Identifier,
-        Program, Statement, UnaryOperator, VariableDeclaration,
-    },
-    unique_id,
+use rrbc_parser::ast::{
+    Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Identifier, Program,
+    Statement, UnaryOperator, VariableDeclaration,
 };
+use rrbc_utils::unique_id;
 
 #[derive(Error, Debug)]
 pub enum IdentifierResolutionError {

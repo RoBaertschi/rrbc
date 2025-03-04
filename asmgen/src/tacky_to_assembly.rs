@@ -49,7 +49,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
     match instruction {
         tacky::Instruction::Return(val) => vec![
             assembly::Instruction::Mov {
-                src: val.to_operand(),
+                src: val.into(),
                 dst: assembly::Operand::Register(Register::AX),
             },
             assembly::Instruction::Ret,
@@ -61,7 +61,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         } => vec![
             Instruction::Cmp {
                 lhs: Operand::Imm(0),
-                rhs: src.to_operand(),
+                rhs: src.into(),
             },
             Instruction::Mov {
                 src: Operand::Imm(0),
@@ -71,11 +71,11 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         ],
         tacky::Instruction::Unary { operator, src, dst } => vec![
             assembly::Instruction::Mov {
-                src: src.to_operand(),
+                src: src.into(),
                 dst: assembly::Operand::Pseudo(dst.0.clone()),
             },
             assembly::Instruction::Unary {
-                op: operator.to_assembly(),
+                op: operator.try_into().expect("Not already handled above"),
                 operand: assembly::Operand::Pseudo(dst.0),
             },
         ],
@@ -92,8 +92,8 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             dst,
         } => vec![
             Instruction::Cmp {
-                lhs: rhs.to_operand(),
-                rhs: lhs.to_operand(),
+                lhs: rhs.into(),
+                rhs: lhs.into(),
             },
             Instruction::Mov {
                 src: Operand::Imm(0),
@@ -122,11 +122,11 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             dst,
         } => vec![
             assembly::Instruction::Mov {
-                src: lhs.to_operand(),
+                src: lhs.into(),
                 dst: assembly::Operand::Register(Register::AX),
             },
             assembly::Instruction::Cdq,
-            assembly::Instruction::Idiv(rhs.to_operand()),
+            assembly::Instruction::Idiv(rhs.into()),
             assembly::Instruction::Mov {
                 src: assembly::Operand::Register(Register::AX),
                 dst: assembly::Operand::Pseudo(dst.0),
@@ -139,11 +139,11 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             dst,
         } => vec![
             assembly::Instruction::Mov {
-                src: lhs.to_operand(),
+                src: lhs.into(),
                 dst: assembly::Operand::Register(Register::AX),
             },
             assembly::Instruction::Cdq,
-            assembly::Instruction::Idiv(rhs.to_operand()),
+            assembly::Instruction::Idiv(rhs.into()),
             assembly::Instruction::Mov {
                 src: assembly::Operand::Register(Register::DX),
                 dst: assembly::Operand::Pseudo(dst.0),
@@ -151,7 +151,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
         ],
         tacky::Instruction::Binary { op, lhs, rhs, dst } => vec![
             assembly::Instruction::Mov {
-                src: lhs.to_operand(),
+                src: lhs.into(),
                 dst: assembly::Operand::Pseudo(dst.0.clone()),
             },
             assembly::Instruction::Binary {
@@ -173,27 +173,27 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
                     tacky::BinaryOperator::GreaterThan => unreachable!(),
                     tacky::BinaryOperator::GreaterOrEqual => unreachable!(),
                 },
-                lhs: rhs.to_operand(),
+                lhs: rhs.into(),
                 rhs: assembly::Operand::Pseudo(dst.0),
             },
         ],
         tacky::Instruction::JumpIfZero(val, target) => vec![
             Instruction::Cmp {
                 lhs: Operand::Imm(0),
-                rhs: val.to_operand(),
+                rhs: val.into(),
             },
             Instruction::JumpCC(CondCode::E, target),
         ],
         tacky::Instruction::JumpIfNotZero(val, target) => vec![
             Instruction::Cmp {
                 lhs: Operand::Imm(0),
-                rhs: val.to_operand(),
+                rhs: val.into(),
             },
             Instruction::JumpCC(CondCode::NE, target),
         ],
         tacky::Instruction::Copy(src, dst) => vec![Instruction::Mov {
-            src: src.to_operand(),
-            dst: dst.to_operand(),
+            src: src.into(),
+            dst: dst.into(),
         }],
         tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label)],
         tacky::Instruction::Label(label) => vec![Instruction::Label(label)],
@@ -215,7 +215,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
 
             for (i, arg) in register_args.iter().enumerate() {
                 let r = ARG_REGISTERS[i];
-                let assembly_arg = arg.to_operand();
+                let assembly_arg = arg.into();
                 instructions.push(Instruction::Mov {
                     src: assembly_arg,
                     dst: Operand::Register(r),
@@ -223,7 +223,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             }
 
             for arg in stack_args.iter().rev() {
-                let assembly_arg = arg.to_operand();
+                let assembly_arg = arg.into();
                 match assembly_arg {
                     arg @ (Operand::Register(_) | Operand::Imm(_)) => {
                         instructions.push(Instruction::Push(arg))
@@ -244,7 +244,7 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
                 instructions.push(Instruction::DeallocateStack(bytes_to_remove));
             }
 
-            let assembly_dst = Value::Var(dst).to_operand();
+            let assembly_dst = Value::Var(dst).into();
             instructions.push(Instruction::Mov {
                 src: Operand::Register(Register::AX),
                 dst: assembly_dst,

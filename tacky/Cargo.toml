@@ -1,0 +1,11 @@
+[package]
+name = "rrbc-tacky"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rrbc-parser = { path = "../parser", optional = true }
+
+[features]
+default = ["ast"]
+ast = ["dep:rrbc-parser"]

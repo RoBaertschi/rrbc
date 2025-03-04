@@ -1,5 +1,5 @@
-#[cfg(feature = "codegen")]
-use crate::assembly;
+#[cfg(feature = "ast")]
+pub mod ast;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Program(pub Vec<FunctionDefiniton>);
@@ -51,16 +51,6 @@ pub enum Value {
     Var(Var),
 }
 
-impl Value {
-    #[cfg(feature = "codegen")]
-    pub fn to_operand(&self) -> assembly::Operand {
-        match self {
-            Value::Constant(val) => assembly::Operand::Imm(*val),
-            Value::Var(ident) => assembly::Operand::Pseudo(ident.0.clone()),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Add,
@@ -86,15 +76,4 @@ pub enum UnaryOperator {
     Complement,
     Negate,
     Not,
-}
-
-impl UnaryOperator {
-    #[cfg(feature = "codegen")]
-    pub fn to_assembly(&self) -> assembly::UnaryOperator {
-        match self {
-            UnaryOperator::Complement => assembly::UnaryOperator::Not,
-            UnaryOperator::Negate => assembly::UnaryOperator::Neg,
-            _ => todo!("Not implemented UnaryOperator to assembly: {:?}", self),
-        }
-    }
 }

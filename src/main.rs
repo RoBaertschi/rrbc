@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use rbc::driver;
+mod driver;
 
 fn main() -> ExitCode {
     let result = driver::run();

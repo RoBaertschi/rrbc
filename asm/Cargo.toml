@@ -1,0 +1,12 @@
+[package]
+name = "rrbc-asm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rrbc-tacky = { path = "../tacky/", optional = true }
+rrbc-semantic-analysis = { path = "../semantic-analysis/" }
+
+[features]
+default = ["tacky"]
+tacky = ["dep:rrbc-tacky"]

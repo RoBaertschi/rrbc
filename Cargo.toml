@@ -1,21 +1,35 @@
 [package]
-name = "rbc"
+name = "rrbc"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-thiserror = "1.0.64"
+anyhow = "1.0.97"
+rrbc-parser = { path = "./parser/" }
+
+rrbc-semantic-analysis = { path = "./semantic-analysis/", optional = true }
+rrbc-tackygen = { path = "./tackygen", optional = true }
+rrbc-tacky = { path = "./tacky", optional = true }
+rrbc-asmgen = { path = "./asmgen", optional = true }
+rrbc-asm = { path = "./asm", optional = true }
 
 # For debugging
 [features]
 default = ["emit"]
-validate = []
-tacky = ["validate"]
-codegen = ["tacky"]
-emit = ["codegen"]
+validate = ["dep:rrbc-semantic-analysis"]
+tackygen = ["validate", "dep:rrbc-tackygen", "dep:rrbc-tacky"]
+asmgen = ["tackygen", "dep:rrbc-asmgen", "dep:rrbc-asm"]
+emit = ["asmgen"]
 
 [dev-dependencies]
 
 [workspace]
-members = ["parser"]
-
+members = [
+    "asm",
+    "asmgen",
+    "parser",
+    "semantic-analysis",
+    "tacky",
+    "tackygen",
+    "utils",
+]

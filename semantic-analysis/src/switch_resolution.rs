@@ -2,11 +2,9 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::{
-    ast::{Block, BlockItem, Expression, FunctionDeclaration, Program, Statement},
-    unique_id,
-    utils::ResultOkMap,
-};
+use rrbc_parser::ast::{Block, BlockItem, Expression, FunctionDeclaration, Program, Statement};
+use rrbc_utils::unique_id;
+use rrbc_utils::ResultOkMap;
 
 #[derive(Debug, Error)]
 pub enum SwitchResolutionError {

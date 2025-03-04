@@ -1,0 +1,11 @@
+[package]
+name = "rrbc-asmgen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rrbc-asm = { path = "../asm" }
+rrbc-tacky = { path = "../tacky" }
+rrbc-tackygen = { path = "../tackygen" }
+rrbc-parser = { path = "../parser" }
+rrbc-utils = { path = "../utils" }

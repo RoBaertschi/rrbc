@@ -1,4 +1,7 @@
 //! amd64 assembly
+pub mod emit;
+#[cfg(feature = "tacky")]
+pub mod tacky;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instruction {

@@ -1,0 +1,9 @@
+[package]
+name = "rrbc-semantic-analysis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.69"
+rrbc-parser = { path = "../parser" }
+rrbc-utils = { path = "../utils" }

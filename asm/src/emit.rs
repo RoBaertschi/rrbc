@@ -1,11 +1,10 @@
 use std::env::consts::OS;
 
+use rrbc_semantic_analysis::type_checking::Symbols;
+
 use crate::{
-    assembly::{
-        BinaryOperator, CondCode, FunctionDefinition, Instruction, Operand, Program, Register,
-        RegisterSize, UnaryOperator,
-    },
-    semantic_analysis::type_checking::Symbols,
+    BinaryOperator, CondCode, FunctionDefinition, Instruction, Operand, Program, Register,
+    RegisterSize, UnaryOperator,
 };
 
 /// A Structure that implements this trait, can emit assembly using the provided function.

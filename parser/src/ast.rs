@@ -50,27 +50,6 @@ pub enum AssignmentOperator {
     ShiftRight,
 }
 
-impl AssignmentOperator {
-    #[cfg(feature = "tacky")]
-    pub fn to_tacky(&self) -> tacky::BinaryOperator {
-        match self {
-            AssignmentOperator::None => unreachable!(
-                "It is not possible to create a binary operator from a None AssignmentOperator"
-            ),
-            AssignmentOperator::Add => tacky::BinaryOperator::Add,
-            AssignmentOperator::Subtract => tacky::BinaryOperator::Subtract,
-            AssignmentOperator::Multiply => tacky::BinaryOperator::Multiply,
-            AssignmentOperator::Divide => tacky::BinaryOperator::Divide,
-            AssignmentOperator::Reminder => tacky::BinaryOperator::Remainder,
-            AssignmentOperator::BitwiseOr => tacky::BinaryOperator::BitwiseOr,
-            AssignmentOperator::BitwiseAnd => tacky::BinaryOperator::BitwiseAnd,
-            AssignmentOperator::BitwiseXor => tacky::BinaryOperator::Xor,
-            AssignmentOperator::ShiftLeft => tacky::BinaryOperator::Sal,
-            AssignmentOperator::ShiftRight => tacky::BinaryOperator::Sar,
-        }
-    }
-}
-
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Add,
