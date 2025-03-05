@@ -8,7 +8,7 @@ pub fn run_second_pass(program: Program) -> (Program, HashMap<String, i64>) {
         stack_offset: HashMap::new(),
         current_function: String::new(),
     }
-    .gen(program)
+    .r#gen(program)
 }
 
 struct SecondPass {
@@ -18,7 +18,7 @@ struct SecondPass {
 }
 
 impl SecondPass {
-    pub fn gen(mut self, program: assembly::Program) -> (Program, HashMap<String, i64>) {
+    pub fn r#gen(mut self, program: assembly::Program) -> (Program, HashMap<String, i64>) {
         (
             Program(
                 program
