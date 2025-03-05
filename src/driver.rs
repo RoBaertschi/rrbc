@@ -20,6 +20,7 @@ enum Flag {
     Output,     // -o
     Help,       // --help
     EmitObject, // -c
+    Debug,      // --debug
 }
 
 fn flag(string: &str) -> Option<Flag> {
@@ -33,6 +34,7 @@ fn flag(string: &str) -> Option<Flag> {
         "-o" => Some(Flag::Output),
         "--help" => Some(Flag::Help),
         "-c" => Some(Flag::EmitObject),
+        "--debug" => Some(Flag::Debug),
         _ => None,
     }
 }
@@ -49,6 +51,7 @@ fn argument(arg: String) -> Argument {
     }
 }
 
+#[derive(Debug)]
 enum Goal {
     Lex,
     Parse,
@@ -84,16 +87,19 @@ fn check_feature_flags_with_goal(goal: &Goal) {
     }
 }
 
+#[derive(Debug)]
 enum ProgramType {
     Object,
     Exectuable,
 }
 
+#[derive(Debug)]
 struct ProgramArgs {
     goal: Goal,
     inputs: Vec<PathBuf>,
     output: PathBuf,
     program_type: ProgramType,
+    debug: bool,
 }
 
 const fn get_args() -> &'static [&'static str] {
@@ -141,6 +147,7 @@ fn parse_program_args(mut args: Args) -> ProgramArgs {
     let mut inputs = vec![];
     let mut output = Option::None;
     let mut program_type = ProgramType::Exectuable;
+    let mut debug = false;
 
     if args.len() < 1 {
         eprintln!("expected more than one argument");
@@ -174,6 +181,7 @@ fn parse_program_args(mut args: Args) -> ProgramArgs {
                     },
                     Flag::Help => print_help(file),
                     Flag::EmitObject => program_type = ProgramType::Object,
+                    Flag::Debug => debug = true,
                 },
                 Argument::File(path_buf) => {
                     inputs.push(path_buf);
@@ -190,12 +198,17 @@ fn parse_program_args(mut args: Args) -> ProgramArgs {
 
     ProgramArgs {
         goal,
+        debug,
         output: match output {
             Some(output) => output,
             None => {
                 if inputs.len() == 1 {
                     let mut output = inputs[0].clone();
-                    output.set_extension("");
+                    output.set_extension(if let ProgramType::Object = &program_type {
+                        "o"
+                    } else {
+                        ""
+                    });
                     output
                 } else {
                     eprintln!("too many input files to check for a guessing the output file, please specify it with -o");
@@ -344,6 +357,9 @@ fn emit(
 
 pub fn run() -> anyhow::Result<()> {
     let args = parse_program_args(env::args());
+    if args.debug {
+        println!("Configuration {args:#?}");
+    }
     check_feature_flags_with_goal(&args.goal);
 
     #[allow(unused_mut)]
