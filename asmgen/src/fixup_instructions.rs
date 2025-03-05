@@ -25,9 +25,12 @@ fn fixup_function(func: FunctionDefinition, stack_offset: i64) -> FunctionDefini
     let mut new_instructions = if stack_offset != 0 {
         vec![Instruction::AllocateStack(
             // TODO(Robin): Fix this one day correctly
+            // NOTE(Robin): 05.03.2025 past robin, wtf did you mean by that
             rrbc_utils::round_away_from_zero(16, stack_bytes)
                 .try_into()
-                .unwrap_or_else(|_err| (-stack_bytes).try_into().unwrap_or(0)),
+                .expect("stack_bytes is invalid usize"), //rrbc_utils::round_away_from_zero(16, stack_bytes)
+                                                         //    .try_into()
+                                                         //    .unwrap_or_else(|_err| (-stack_bytes).try_into().unwrap_or(0)),
         )]
     } else {
         vec![]
