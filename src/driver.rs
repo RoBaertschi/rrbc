@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{bail, Context, Ok};
-use rrbc_asm::emit::EmitAsm;
 
 enum Flag {
     // Goals
@@ -97,10 +96,41 @@ struct ProgramArgs {
     program_type: ProgramType,
 }
 
+const fn get_args() -> &'static [&'static str] {
+    if cfg!(feature = "emit") {
+        &[
+            "--lex",
+            "--parse",
+            "--validate",
+            "--tacky",
+            "--codegen",
+            "-S",
+        ]
+    } else if cfg!(feature = "asmgen") {
+        &[
+            "--lex",
+            "--parse",
+            "--validate",
+            "--tacky",
+            "--codegen",
+            "-S",
+        ]
+    } else if cfg!(feature = "tackygen") {
+        &["--lex", "--parse", "--validate", "--tacky"]
+    } else if cfg!(feature = "validate") {
+        &["--lex", "--parse", "--validate"]
+    } else {
+        &["--lex", "--parse"]
+    }
+}
+
+const ARGS: &'static [&'static str] = get_args();
+
 fn print_help(file: Option<String>) -> ! {
     println!(
-        "{} FILE [--lex | --parse | --validate | --tacky | --codegen | -S | -c | -o FILE]",
-        file.unwrap_or("rbc (no file arg)".to_string())
+        "{} FILE [{} | -c | -o FILE]",
+        file.unwrap_or("rbc (no file arg)".to_string()),
+        ARGS.join(" | "),
     );
     process::exit(1)
 }
@@ -306,6 +336,7 @@ fn emit(
     symbols: rrbc_semantic_analysis::type_checking::Symbols,
     to: PathBuf,
 ) -> anyhow::Result<()> {
+    use rrbc_asm::emit::EmitAsm;
     fs::write(to, program.emit(0, &symbols))?;
 
     Ok(())
@@ -315,11 +346,14 @@ pub fn run() -> anyhow::Result<()> {
     let args = parse_program_args(env::args());
     check_feature_flags_with_goal(&args.goal);
 
+    #[allow(unused_mut)]
     let mut assembly_output_files = vec![];
+    _ = assembly_output_files;
 
     for input in args.inputs {
         let pp_file = input.with_extension("i");
         let asm_file = input.with_extension("S");
+        _ = asm_file;
         preprocess(&input, &pp_file)?;
 
         if let Goal::Lex = args.goal {
