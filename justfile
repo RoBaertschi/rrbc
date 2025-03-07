@@ -1,14 +1,12 @@
 tests := ".tests"
 wacc-tests := tests + "/writing-a-c-compiler-tests"
-chapter := "9"
 
 test_compiler := "./.tests/writing-a-c-compiler-tests/test_compiler"
 
 exists := if path_exists(wacc-tests) == "false" { "just download-tests" } else { "echo Tests already downloaded" }
 
 
-default:
-    just test
+default: test
 
 download-tests:
     mkdir -p .tests
@@ -20,8 +18,7 @@ clean-tests:
 build:
     cargo build
 
-clean:
-    just clean-tests
+clean: clean-tests
     cargo clean
 
 rebuild:
@@ -32,12 +29,14 @@ setup:
     just download-tests
     {{test_compiler}} --check-setup
 
-test:
+chapter := "9"
+
+test *EXTRA="--extra-credit":
     just build
     {{exists}}
 
     @echo "Running Tests, this can take a while..."
-    {{test_compiler}} ./target/debug/rrbc --chapter {{chapter}} --extra-credit
+    {{test_compiler}} ./target/debug/rrbc --chapter {{chapter}} {{EXTRA}}
 
 simple:
     cargo r -- simple.c
