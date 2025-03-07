@@ -38,3 +38,7 @@ test:
 
     @echo "Running Tests, this can take a while..."
     {{test_compiler}} ./target/debug/rrbc --chapter {{chapter}} --extra-credit
+
+simple:
+    cargo r -- simple.c
+    ./simple

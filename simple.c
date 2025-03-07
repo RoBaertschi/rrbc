@@ -1,6 +1,7 @@
 int main(void) {
     int a = 10;
-    do;
-    while ((a = 0));
+    do
+        break;
+    while ((a = 1));
     return a;
 }

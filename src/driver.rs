@@ -76,14 +76,15 @@ fn check_feature_flags_with_goal(goal: &Goal) {
     if !ok {
         panic!("tried to run compiler with flag that indicates a feature flag, but the compiler is not build with that feature flag {}",
             match goal {
-            Goal::Lex => todo!(),
-            Goal::Parse => todo!(),
-            Goal::Validate => "validate",
-            Goal::Tacky => "tackygen",
-            Goal::Assembly => "asmgen",
-            Goal::Codegen => "asmgen",
-            Goal::Compile => "emit",
-        });
+                Goal::Lex => todo!(),
+                Goal::Parse => todo!(),
+                Goal::Validate => "validate",
+                Goal::Tacky => "tackygen",
+                Goal::Assembly => "asmgen",
+                Goal::Codegen => "asmgen",
+                Goal::Compile => "emit",
+            }
+        );
     }
 }
 
