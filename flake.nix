@@ -12,7 +12,7 @@
         naersk-lib = pkgs.callPackage naersk { };
       in
       {
-        defaultPackage = pkgs.callPackage ./nix/package.nix {inherit naersk-lib;};
+        defaultPackage = naersk-lib.buildPackage ./.;
         devShell = with pkgs; mkShell {
           buildInputs = [ cargo rustc rustfmt pre-commit rustPackages.clippy rust-analyzer just python313 gdb ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
