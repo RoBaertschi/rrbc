@@ -1,0 +1,24 @@
+- [ ] asm/src/emit.rs
+- [ ] asm/src/lib.rs
+- [ ] asm/src/tacky.rs
+- [ ] asmgen/src/fixup_instructions.rs
+- [ ] asmgen/src/lib.rs
+- [ ] asmgen/src/replace_pseudo.rs
+- [ ] asmgen/src/tacky_to_assembly.rs
+- [ ] parser/src/ast.rs
+- [ ] parser/src/lexer.rs
+- [ ] parser/src/lib.rs
+- [ ] semantic-analysis/src/identifier_resolution.rs
+- [ ] semantic-analysis/src/label_resolution.rs
+- [ ] semantic-analysis/src/lib.rs
+- [ ] semantic-analysis/src/loop_labeling.rs
+- [ ] semantic-analysis/src/switch_resolution.rs
+- [ ] semantic-analysis/src/type_checking.rs
+- [ ] semantic-analysis/src/types.rs
+- [x] src/driver.rs
+- [x] src/main.rs
+- [ ] tacky/src/ast.rs
+- [ ] tacky/src/lib.rs
+- [ ] tackygen/src/lib.rs
+- [ ] utils/src/lib.rs
+- [ ] utils/src/unique_id.rs
