@@ -29,7 +29,7 @@ setup:
     just download-tests
     {{test_compiler}} --check-setup
 
-chapter := "9"
+chapter := "10"
 
 test *EXTRA="--extra-credit":
     just build
