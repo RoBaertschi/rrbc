@@ -350,7 +350,6 @@ fn emit(
     symbols: rrbc_semantic_analysis::type_checking::Symbols,
     to: PathBuf,
 ) -> anyhow::Result<()> {
-    use rrbc_asm::emit::EmitAsm;
     fs::write(to, program.emit(0, &symbols))?;
 
     Ok(())

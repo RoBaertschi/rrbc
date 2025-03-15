@@ -214,11 +214,9 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             }
 
             for (i, arg) in register_args.iter().enumerate() {
-                let r = ARG_REGISTERS[i];
-                let assembly_arg = arg.into();
                 instructions.push(Instruction::Mov {
-                    src: assembly_arg,
-                    dst: Operand::Register(r),
+                    src: arg.into(),
+                    dst: Operand::Register(ARG_REGISTERS[i]),
                 });
             }
 

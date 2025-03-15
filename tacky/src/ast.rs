@@ -79,29 +79,6 @@ impl TryFrom<ast::BinaryOperator> for BinaryOperator {
     }
 }
 
-//impl From<ast::AssignmentOperator> for BinaryOperator {
-//    /// # Panics
-//    /// Panics if a AssignmentOperator::None is given, for a save alternative,
-//    /// consider try_from
-//    fn from(value: ast::AssignmentOperator) -> Self {
-//        match value {
-//            ast::AssignmentOperator::None => unreachable!(
-//                "It is not possible to create a binary operator from a None AssignmentOperator"
-//            ),
-//            ast::AssignmentOperator::Add => BinaryOperator::Add,
-//            ast::AssignmentOperator::Subtract => BinaryOperator::Subtract,
-//            ast::AssignmentOperator::Multiply => BinaryOperator::Multiply,
-//            ast::AssignmentOperator::Divide => BinaryOperator::Divide,
-//            ast::AssignmentOperator::Reminder => BinaryOperator::Remainder,
-//            ast::AssignmentOperator::BitwiseOr => BinaryOperator::BitwiseOr,
-//            ast::AssignmentOperator::BitwiseAnd => BinaryOperator::BitwiseAnd,
-//            ast::AssignmentOperator::BitwiseXor => BinaryOperator::Xor,
-//            ast::AssignmentOperator::ShiftLeft => BinaryOperator::Sal,
-//            ast::AssignmentOperator::ShiftRight => BinaryOperator::Sar,
-//        }
-//    }
-//}
-
 #[derive(Debug)]
 pub struct InvalidUnaryOperator(pub ast::UnaryOperator);
 

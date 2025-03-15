@@ -6,7 +6,7 @@ use crate::assembly::{
 
 use rrbc_utils;
 
-pub fn run_third_pass(program: Program, stack_offset: HashMap<String, i64>) -> Program {
+pub fn fixup_program(program: Program, stack_offset: HashMap<String, i64>) -> Program {
     Program(
         program
             .0

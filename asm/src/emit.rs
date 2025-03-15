@@ -7,19 +7,11 @@ use crate::{
     RegisterSize, UnaryOperator,
 };
 
-/// A Structure that implements this trait, can emit assembly using the provided function.
-/// A high-level construct should also add a comment with more debugging information.
-/// A high-level construct would currently be a function.
-pub trait EmitAsm {
-    /// The indent_depth argument only needs to be used when you have to indent something.
-    fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String;
-}
-
 impl Operand {
-    fn emit(&self) -> String {
+    pub fn emit(&self) -> String {
         self.emit_size(RegisterSize::Four)
     }
-    fn emit_size(&self, size: RegisterSize) -> String {
+    pub fn emit_size(&self, size: RegisterSize) -> String {
         match self {
             Operand::Register(reg) =>
                 format!("%{}", match reg {
@@ -76,8 +68,8 @@ impl Operand {
     }
 }
 
-impl EmitAsm for Instruction {
-    fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
+impl Instruction {
+    pub fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
         let tabs = "\t".repeat(indent_depth as usize);
 
         match self {
@@ -163,8 +155,8 @@ impl EmitAsm for Instruction {
     }
 }
 
-impl EmitAsm for CondCode {
-    fn emit(&self, _: u32, _: &Symbols) -> String {
+impl CondCode {
+    pub fn emit(&self, _: u32, _: &Symbols) -> String {
         match self {
             CondCode::E => "e",
             CondCode::NE => "ne",
@@ -177,8 +169,8 @@ impl EmitAsm for CondCode {
     }
 }
 
-impl EmitAsm for UnaryOperator {
-    fn emit(&self, _: u32, _: &Symbols) -> String {
+impl UnaryOperator {
+    pub fn emit(&self, _: u32, _: &Symbols) -> String {
         match self {
             UnaryOperator::Neg => "negl".to_owned(),
             UnaryOperator::Not => "notl".to_owned(),
@@ -186,8 +178,8 @@ impl EmitAsm for UnaryOperator {
     }
 }
 
-impl EmitAsm for BinaryOperator {
-    fn emit(&self, _: u32, _: &Symbols) -> String {
+impl BinaryOperator {
+    pub fn emit(&self, _: u32, _: &Symbols) -> String {
         match self {
             BinaryOperator::Add => "addl",
             BinaryOperator::Sub => "subl",
@@ -202,8 +194,8 @@ impl EmitAsm for BinaryOperator {
     }
 }
 
-impl EmitAsm for FunctionDefinition {
-    fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
+impl FunctionDefinition {
+    pub fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
         let tabs = "\t".repeat((indent_depth + 1) as usize);
 
         let start = format!("{}pushq %rbp\n{}movq %rsp, %rbp", tabs, tabs);
@@ -228,8 +220,8 @@ impl EmitAsm for FunctionDefinition {
     }
 }
 
-impl EmitAsm for Program {
-    fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
+impl Program {
+    pub fn emit(&self, indent_depth: u32, symbols: &Symbols) -> String {
         format!(
             "{}\n{}",
             self.0
