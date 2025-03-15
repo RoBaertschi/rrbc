@@ -1,20 +1,17 @@
-use rrbc_asm as assembly;
-use rrbc_tacky as tacky;
-
 pub mod fixup_instructions;
 pub mod replace_pseudo;
 pub mod tacky_to_assembly;
 
-pub fn code_generation(program: tacky::Program) -> assembly::Program {
+pub fn code_generation(program: rrbc_tacky::Program) -> rrbc_asm::Program {
     let program = tacky_to_assembly::code_generation(program);
-    let (program, stack_offset) = replace_pseudo::run_second_pass(program);
+    let (program, stack_offset) = replace_pseudo::replace_pseudo_program(program);
 
     fixup_instructions::fixup_program(program, stack_offset)
 }
 
 #[cfg(test)]
 mod tests {
-    use assembly::Instruction;
+    use rrbc_asm::Instruction;
 
     use rrbc_parser::lexer::Lexer;
     use rrbc_parser::Parser;
@@ -46,13 +43,13 @@ mod tests {
             program.0[0].instructions,
             vec![
                 Instruction::Mov {
-                    src: assembly::Operand::Imm(2),
-                    dst: assembly::Operand::Register(assembly::Register::AX)
+                    src: rrbc_asm::Operand::Imm(2),
+                    dst: rrbc_asm::Operand::Register(rrbc_asm::Register::AX)
                 },
                 Instruction::Ret,
                 Instruction::Mov {
-                    src: assembly::Operand::Imm(0),
-                    dst: assembly::Operand::Register(assembly::Register::AX)
+                    src: rrbc_asm::Operand::Imm(0),
+                    dst: rrbc_asm::Operand::Register(rrbc_asm::Register::AX)
                 },
                 Instruction::Ret,
             ]

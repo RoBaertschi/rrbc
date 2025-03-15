@@ -1,10 +1,8 @@
-use crate::{
-    assembly::{self, CondCode, Instruction, Operand, Register},
-    tacky::{self, UnaryOperator, Value},
-};
+use rrbc_asm::{self, CondCode, Instruction, Operand, Register};
+use rrbc_tacky::{self, UnaryOperator, Value};
 
-pub(super) fn code_generation(program: tacky::Program) -> assembly::Program {
-    assembly::Program(program.0.into_iter().map(cg_function).collect())
+pub fn code_generation(program: rrbc_tacky::Program) -> rrbc_asm::Program {
+    rrbc_asm::Program(program.0.into_iter().map(cg_function).collect())
 }
 
 const ARG_REGISTERS: [Register; 6] = [
@@ -16,17 +14,17 @@ const ARG_REGISTERS: [Register; 6] = [
     Register::R9,
 ];
 
-pub(super) fn cg_function(func: tacky::FunctionDefiniton) -> assembly::FunctionDefinition {
-    let mut asm_insts: Vec<assembly::Instruction> = vec![];
+fn cg_function(func: rrbc_tacky::FunctionDefiniton) -> rrbc_asm::FunctionDefinition {
+    let mut asm_insts: Vec<rrbc_asm::Instruction> = vec![];
 
     for (i, param) in func.params.into_iter().enumerate() {
         if i < ARG_REGISTERS.len() {
-            asm_insts.push(assembly::Instruction::Mov {
+            asm_insts.push(rrbc_asm::Instruction::Mov {
                 src: Operand::Register(ARG_REGISTERS[i]),
                 dst: Operand::Pseudo(param),
             });
         } else {
-            asm_insts.push(assembly::Instruction::Mov {
+            asm_insts.push(rrbc_asm::Instruction::Mov {
                 src: Operand::Stack(16_i64 + (8_i64 * <usize as TryInto<i64>>
                     ::try_into(i - ARG_REGISTERS.len())
                     .expect("Stack has grown to big to fit into a i64, this is highly unlikely, if this happens to you please open an issue"))),
@@ -39,22 +37,22 @@ pub(super) fn cg_function(func: tacky::FunctionDefiniton) -> assembly::FunctionD
         asm_insts.append(&mut cg_instruction(inst));
     }
 
-    assembly::FunctionDefinition {
+    rrbc_asm::FunctionDefinition {
         name: func.identifier,
         instructions: asm_insts,
     }
 }
 
-pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::Instruction> {
+fn cg_instruction(instruction: rrbc_tacky::Instruction) -> Vec<rrbc_asm::Instruction> {
     match instruction {
-        tacky::Instruction::Return(val) => vec![
-            assembly::Instruction::Mov {
+        rrbc_tacky::Instruction::Return(val) => vec![
+            rrbc_asm::Instruction::Mov {
                 src: val.into(),
-                dst: assembly::Operand::Register(Register::AX),
+                dst: rrbc_asm::Operand::Register(Register::AX),
             },
-            assembly::Instruction::Ret,
+            rrbc_asm::Instruction::Ret,
         ],
-        tacky::Instruction::Unary {
+        rrbc_tacky::Instruction::Unary {
             operator: UnaryOperator::Not,
             src,
             dst,
@@ -69,24 +67,24 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             },
             Instruction::SetCC(CondCode::E, Operand::Pseudo(dst.0)),
         ],
-        tacky::Instruction::Unary { operator, src, dst } => vec![
-            assembly::Instruction::Mov {
+        rrbc_tacky::Instruction::Unary { operator, src, dst } => vec![
+            rrbc_asm::Instruction::Mov {
                 src: src.into(),
-                dst: assembly::Operand::Pseudo(dst.0.clone()),
+                dst: rrbc_asm::Operand::Pseudo(dst.0.clone()),
             },
-            assembly::Instruction::Unary {
+            rrbc_asm::Instruction::Unary {
                 op: operator.try_into().expect("Not already handled above"),
-                operand: assembly::Operand::Pseudo(dst.0),
+                operand: rrbc_asm::Operand::Pseudo(dst.0),
             },
         ],
-        tacky::Instruction::Binary {
+        rrbc_tacky::Instruction::Binary {
             op:
-                operand @ (tacky::BinaryOperator::GreaterThan
-                | tacky::BinaryOperator::GreaterOrEqual
-                | tacky::BinaryOperator::LessThan
-                | tacky::BinaryOperator::LessOrEqual
-                | tacky::BinaryOperator::Equal
-                | tacky::BinaryOperator::NotEqual),
+                operand @ (rrbc_tacky::BinaryOperator::GreaterThan
+                | rrbc_tacky::BinaryOperator::GreaterOrEqual
+                | rrbc_tacky::BinaryOperator::LessThan
+                | rrbc_tacky::BinaryOperator::LessOrEqual
+                | rrbc_tacky::BinaryOperator::Equal
+                | rrbc_tacky::BinaryOperator::NotEqual),
             lhs,
             rhs,
             dst,
@@ -97,107 +95,107 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             },
             Instruction::Mov {
                 src: Operand::Imm(0),
-                dst: assembly::Operand::Pseudo(dst.0.clone()),
+                dst: rrbc_asm::Operand::Pseudo(dst.0.clone()),
             },
             Instruction::SetCC(
                 match operand {
-                    tacky::BinaryOperator::LessThan => CondCode::L,
-                    tacky::BinaryOperator::LessOrEqual => CondCode::LE,
-                    tacky::BinaryOperator::GreaterThan => CondCode::G,
-                    tacky::BinaryOperator::GreaterOrEqual => CondCode::GE,
-                    tacky::BinaryOperator::Equal => CondCode::E,
-                    tacky::BinaryOperator::NotEqual => CondCode::NE,
+                    rrbc_tacky::BinaryOperator::LessThan => CondCode::L,
+                    rrbc_tacky::BinaryOperator::LessOrEqual => CondCode::LE,
+                    rrbc_tacky::BinaryOperator::GreaterThan => CondCode::G,
+                    rrbc_tacky::BinaryOperator::GreaterOrEqual => CondCode::GE,
+                    rrbc_tacky::BinaryOperator::Equal => CondCode::E,
+                    rrbc_tacky::BinaryOperator::NotEqual => CondCode::NE,
                     op => unreachable!(
-                        "unreachable in assembly generation for relational operators: {:?}",
+                        "unreachable in rrbc_asm generation for relational operators: {:?}",
                         op
                     ),
                 },
-                assembly::Operand::Pseudo(dst.0),
+                rrbc_asm::Operand::Pseudo(dst.0),
             ),
         ],
-        tacky::Instruction::Binary {
-            op: tacky::BinaryOperator::Divide,
+        rrbc_tacky::Instruction::Binary {
+            op: rrbc_tacky::BinaryOperator::Divide,
             lhs,
             rhs,
             dst,
         } => vec![
-            assembly::Instruction::Mov {
+            rrbc_asm::Instruction::Mov {
                 src: lhs.into(),
-                dst: assembly::Operand::Register(Register::AX),
+                dst: rrbc_asm::Operand::Register(Register::AX),
             },
-            assembly::Instruction::Cdq,
-            assembly::Instruction::Idiv(rhs.into()),
-            assembly::Instruction::Mov {
-                src: assembly::Operand::Register(Register::AX),
-                dst: assembly::Operand::Pseudo(dst.0),
+            rrbc_asm::Instruction::Cdq,
+            rrbc_asm::Instruction::Idiv(rhs.into()),
+            rrbc_asm::Instruction::Mov {
+                src: rrbc_asm::Operand::Register(Register::AX),
+                dst: rrbc_asm::Operand::Pseudo(dst.0),
             },
         ],
-        tacky::Instruction::Binary {
-            op: tacky::BinaryOperator::Remainder,
+        rrbc_tacky::Instruction::Binary {
+            op: rrbc_tacky::BinaryOperator::Remainder,
             lhs,
             rhs,
             dst,
         } => vec![
-            assembly::Instruction::Mov {
+            rrbc_asm::Instruction::Mov {
                 src: lhs.into(),
-                dst: assembly::Operand::Register(Register::AX),
+                dst: rrbc_asm::Operand::Register(Register::AX),
             },
-            assembly::Instruction::Cdq,
-            assembly::Instruction::Idiv(rhs.into()),
-            assembly::Instruction::Mov {
-                src: assembly::Operand::Register(Register::DX),
-                dst: assembly::Operand::Pseudo(dst.0),
+            rrbc_asm::Instruction::Cdq,
+            rrbc_asm::Instruction::Idiv(rhs.into()),
+            rrbc_asm::Instruction::Mov {
+                src: rrbc_asm::Operand::Register(Register::DX),
+                dst: rrbc_asm::Operand::Pseudo(dst.0),
             },
         ],
-        tacky::Instruction::Binary { op, lhs, rhs, dst } => vec![
-            assembly::Instruction::Mov {
+        rrbc_tacky::Instruction::Binary { op, lhs, rhs, dst } => vec![
+            rrbc_asm::Instruction::Mov {
                 src: lhs.into(),
-                dst: assembly::Operand::Pseudo(dst.0.clone()),
+                dst: rrbc_asm::Operand::Pseudo(dst.0.clone()),
             },
-            assembly::Instruction::Binary {
+            rrbc_asm::Instruction::Binary {
                 op: match op {
-                    tacky::BinaryOperator::Add => assembly::BinaryOperator::Add,
-                    tacky::BinaryOperator::Subtract => assembly::BinaryOperator::Sub,
-                    tacky::BinaryOperator::Multiply => assembly::BinaryOperator::Mult,
-                    tacky::BinaryOperator::Sal => assembly::BinaryOperator::Sal,
-                    tacky::BinaryOperator::Sar => assembly::BinaryOperator::Sar,
-                    tacky::BinaryOperator::BitwiseAnd => assembly::BinaryOperator::And,
-                    tacky::BinaryOperator::Xor => assembly::BinaryOperator::Xor,
-                    tacky::BinaryOperator::BitwiseOr => assembly::BinaryOperator::Or,
-                    tacky::BinaryOperator::Divide => unreachable!(),
-                    tacky::BinaryOperator::Remainder => unreachable!(),
-                    tacky::BinaryOperator::Equal => unreachable!(),
-                    tacky::BinaryOperator::NotEqual => unreachable!(),
-                    tacky::BinaryOperator::LessThan => unreachable!(),
-                    tacky::BinaryOperator::LessOrEqual => unreachable!(),
-                    tacky::BinaryOperator::GreaterThan => unreachable!(),
-                    tacky::BinaryOperator::GreaterOrEqual => unreachable!(),
+                    rrbc_tacky::BinaryOperator::Add => rrbc_asm::BinaryOperator::Add,
+                    rrbc_tacky::BinaryOperator::Subtract => rrbc_asm::BinaryOperator::Sub,
+                    rrbc_tacky::BinaryOperator::Multiply => rrbc_asm::BinaryOperator::Mult,
+                    rrbc_tacky::BinaryOperator::Sal => rrbc_asm::BinaryOperator::Sal,
+                    rrbc_tacky::BinaryOperator::Sar => rrbc_asm::BinaryOperator::Sar,
+                    rrbc_tacky::BinaryOperator::BitwiseAnd => rrbc_asm::BinaryOperator::And,
+                    rrbc_tacky::BinaryOperator::Xor => rrbc_asm::BinaryOperator::Xor,
+                    rrbc_tacky::BinaryOperator::BitwiseOr => rrbc_asm::BinaryOperator::Or,
+                    rrbc_tacky::BinaryOperator::Divide => unreachable!(),
+                    rrbc_tacky::BinaryOperator::Remainder => unreachable!(),
+                    rrbc_tacky::BinaryOperator::Equal => unreachable!(),
+                    rrbc_tacky::BinaryOperator::NotEqual => unreachable!(),
+                    rrbc_tacky::BinaryOperator::LessThan => unreachable!(),
+                    rrbc_tacky::BinaryOperator::LessOrEqual => unreachable!(),
+                    rrbc_tacky::BinaryOperator::GreaterThan => unreachable!(),
+                    rrbc_tacky::BinaryOperator::GreaterOrEqual => unreachable!(),
                 },
                 lhs: rhs.into(),
-                rhs: assembly::Operand::Pseudo(dst.0),
+                rhs: rrbc_asm::Operand::Pseudo(dst.0),
             },
         ],
-        tacky::Instruction::JumpIfZero(val, target) => vec![
+        rrbc_tacky::Instruction::JumpIfZero(val, target) => vec![
             Instruction::Cmp {
                 lhs: Operand::Imm(0),
                 rhs: val.into(),
             },
             Instruction::JumpCC(CondCode::E, target),
         ],
-        tacky::Instruction::JumpIfNotZero(val, target) => vec![
+        rrbc_tacky::Instruction::JumpIfNotZero(val, target) => vec![
             Instruction::Cmp {
                 lhs: Operand::Imm(0),
                 rhs: val.into(),
             },
             Instruction::JumpCC(CondCode::NE, target),
         ],
-        tacky::Instruction::Copy(src, dst) => vec![Instruction::Mov {
+        rrbc_tacky::Instruction::Copy(src, dst) => vec![Instruction::Mov {
             src: src.into(),
             dst: dst.into(),
         }],
-        tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label)],
-        tacky::Instruction::Label(label) => vec![Instruction::Label(label)],
-        tacky::Instruction::FunCall {
+        rrbc_tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label)],
+        rrbc_tacky::Instruction::Label(label) => vec![Instruction::Label(label)],
+        rrbc_tacky::Instruction::FunCall {
             fun_name,
             args,
             dst,
@@ -221,8 +219,8 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
             }
 
             for arg in stack_args.iter().rev() {
-                let assembly_arg = arg.into();
-                match assembly_arg {
+                let rrbc_asm_arg = arg.into();
+                match rrbc_asm_arg {
                     arg @ (Operand::Register(_) | Operand::Imm(_)) => {
                         instructions.push(Instruction::Push(arg))
                     }
@@ -242,10 +240,10 @@ pub(super) fn cg_instruction(instruction: tacky::Instruction) -> Vec<assembly::I
                 instructions.push(Instruction::DeallocateStack(bytes_to_remove));
             }
 
-            let assembly_dst = Value::Var(dst).into();
+            let rrbc_asm_dst = Value::Var(dst).into();
             instructions.push(Instruction::Mov {
                 src: Operand::Register(Register::AX),
-                dst: assembly_dst,
+                dst: rrbc_asm_dst,
             });
 
             instructions
