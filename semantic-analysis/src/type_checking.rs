@@ -2,14 +2,12 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::{
-    ast::{
-        Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program,
-        Statement, VariableDeclaration,
-    },
-    types::Type,
-    utils::ResultOkMap,
+use crate::types::Type;
+use rrbc_parser::ast::{
+    Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Program, Statement,
+    VariableDeclaration,
 };
+use rrbc_utils::ResultOkMap;
 
 pub type Symbols = HashMap<String, (Type, bool)>;
 

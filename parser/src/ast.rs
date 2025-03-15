@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-#[cfg(feature = "tacky")]
-use crate::tacky;
-
 pub type Identifier = String;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -53,27 +50,6 @@ pub enum AssignmentOperator {
     ShiftRight,
 }
 
-impl AssignmentOperator {
-    #[cfg(feature = "tacky")]
-    pub fn to_tacky(&self) -> tacky::BinaryOperator {
-        match self {
-            AssignmentOperator::None => unreachable!(
-                "It is not possible to create a binary operator from a None AssignmentOperator"
-            ),
-            AssignmentOperator::Add => tacky::BinaryOperator::Add,
-            AssignmentOperator::Subtract => tacky::BinaryOperator::Subtract,
-            AssignmentOperator::Multiply => tacky::BinaryOperator::Multiply,
-            AssignmentOperator::Divide => tacky::BinaryOperator::Divide,
-            AssignmentOperator::Reminder => tacky::BinaryOperator::Remainder,
-            AssignmentOperator::BitwiseOr => tacky::BinaryOperator::BitwiseOr,
-            AssignmentOperator::BitwiseAnd => tacky::BinaryOperator::BitwiseAnd,
-            AssignmentOperator::BitwiseXor => tacky::BinaryOperator::Xor,
-            AssignmentOperator::ShiftLeft => tacky::BinaryOperator::Sal,
-            AssignmentOperator::ShiftRight => tacky::BinaryOperator::Sar,
-        }
-    }
-}
-
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum BinaryOperator {
     Add,
@@ -96,32 +72,6 @@ pub enum BinaryOperator {
     GreaterOrEqual,
 }
 
-impl BinaryOperator {
-    #[cfg(feature = "tacky")]
-    pub fn to_tacky(&self) -> tacky::BinaryOperator {
-        match self {
-            BinaryOperator::Add => tacky::BinaryOperator::Add,
-            BinaryOperator::Subtract => tacky::BinaryOperator::Subtract,
-            BinaryOperator::Multiply => tacky::BinaryOperator::Multiply,
-            BinaryOperator::Divide => tacky::BinaryOperator::Divide,
-            BinaryOperator::Reminder => tacky::BinaryOperator::Remainder,
-            BinaryOperator::ShiftLeft => tacky::BinaryOperator::Sal,
-            BinaryOperator::ShiftRight => tacky::BinaryOperator::Sar,
-            BinaryOperator::BitwiseAnd => tacky::BinaryOperator::BitwiseAnd,
-            BinaryOperator::Xor => tacky::BinaryOperator::Xor,
-            BinaryOperator::BitwiseOr => tacky::BinaryOperator::BitwiseOr,
-            BinaryOperator::And => unreachable!("And && can not be a tacky binary operator"),
-            BinaryOperator::Or => unreachable!("Or || can not be a tacky binary operator"),
-            BinaryOperator::Equal => tacky::BinaryOperator::Equal,
-            BinaryOperator::NotEqual => tacky::BinaryOperator::NotEqual,
-            BinaryOperator::LessThan => tacky::BinaryOperator::LessThan,
-            BinaryOperator::LessOrEqual => tacky::BinaryOperator::LessOrEqual,
-            BinaryOperator::GreaterThan => tacky::BinaryOperator::GreaterThan,
-            BinaryOperator::GreaterOrEqual => tacky::BinaryOperator::GreaterOrEqual,
-        }
-    }
-}
-
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum UnaryOperator {
     Complement,
@@ -129,20 +79,6 @@ pub enum UnaryOperator {
     Not,
     Increment,
     Decrement,
-}
-
-impl UnaryOperator {
-    #[cfg(feature = "tacky")]
-    pub fn to_tacky(&self) -> tacky::UnaryOperator {
-        match self {
-            UnaryOperator::Complement => tacky::UnaryOperator::Complement,
-            UnaryOperator::Negate => tacky::UnaryOperator::Negate,
-            UnaryOperator::Not => tacky::UnaryOperator::Not,
-            UnaryOperator::Increment | UnaryOperator::Decrement => {
-                unreachable!("Increment and Decrement are not supported to be represented in a Tacky UnaryOperator")
-            }
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

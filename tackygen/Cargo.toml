@@ -1,0 +1,9 @@
+[package]
+name = "rrbc-tackygen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rrbc-parser = { path = "../parser" }
+rrbc-tacky = { path = "../tacky", features = ["ast"] }
+rrbc-utils = { path = "../utils/" }

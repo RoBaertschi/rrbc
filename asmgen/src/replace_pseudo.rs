@@ -1,24 +1,24 @@
 use std::collections::HashMap;
 
-use crate::assembly::{self, FunctionDefinition, Instruction, Program};
+use rrbc_asm::{self, FunctionDefinition, Instruction, Program};
 
-pub fn run_second_pass(program: Program) -> (Program, HashMap<String, i64>) {
-    SecondPass {
+pub fn replace_pseudo_program(program: Program) -> (Program, HashMap<String, i64>) {
+    ReplacePseudoPass {
         offest_to_identifier: HashMap::new(),
         stack_offset: HashMap::new(),
         current_function: String::new(),
     }
-    .gen(program)
+    .program(program)
 }
 
-struct SecondPass {
+struct ReplacePseudoPass {
     offest_to_identifier: HashMap<String, i64>,
     stack_offset: HashMap<String, i64>,
     current_function: String,
 }
 
-impl SecondPass {
-    pub fn gen(mut self, program: assembly::Program) -> (Program, HashMap<String, i64>) {
+impl ReplacePseudoPass {
+    pub fn program(mut self, program: rrbc_asm::Program) -> (Program, HashMap<String, i64>) {
         (
             Program(
                 program
@@ -31,7 +31,7 @@ impl SecondPass {
         )
     }
 
-    fn function(&mut self, func: assembly::FunctionDefinition) -> assembly::FunctionDefinition {
+    fn function(&mut self, func: rrbc_asm::FunctionDefinition) -> rrbc_asm::FunctionDefinition {
         self.current_function = func.name.clone();
         FunctionDefinition {
             name: func.name,
@@ -41,8 +41,8 @@ impl SecondPass {
 
     fn instructions(
         &mut self,
-        mut instructions: Vec<assembly::Instruction>,
-    ) -> Vec<assembly::Instruction> {
+        mut instructions: Vec<rrbc_asm::Instruction>,
+    ) -> Vec<rrbc_asm::Instruction> {
         for inst in instructions.iter_mut() {
             match inst {
                 Instruction::Ret => {}
@@ -51,13 +51,9 @@ impl SecondPass {
                     self.pseudo_to_stack(dst);
                 }
                 Instruction::Unary { op: _, operand } => self.pseudo_to_stack(operand),
-                Instruction::Binary {
-                    op: _,
-                    lhs: op1,
-                    rhs: op2,
-                } => {
-                    self.pseudo_to_stack(op1);
-                    self.pseudo_to_stack(op2);
+                Instruction::Binary { op: _, lhs, rhs } => {
+                    self.pseudo_to_stack(lhs);
+                    self.pseudo_to_stack(rhs);
                 }
                 Instruction::Idiv(operand) => self.pseudo_to_stack(operand),
                 Instruction::Push(operand) => self.pseudo_to_stack(operand),
@@ -81,9 +77,9 @@ impl SecondPass {
         instructions
     }
 
-    fn pseudo_to_stack(&mut self, operand: &mut assembly::Operand) {
-        if let assembly::Operand::Pseudo(ident) = operand {
-            *operand = assembly::Operand::Stack(
+    fn pseudo_to_stack(&mut self, operand: &mut rrbc_asm::Operand) {
+        if let rrbc_asm::Operand::Pseudo(ident) = operand {
+            *operand = rrbc_asm::Operand::Stack(
                 *self
                     .offest_to_identifier
                     .entry(ident.clone())

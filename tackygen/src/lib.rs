@@ -1,8 +1,10 @@
-use crate::{
-    ast::{self, BinaryOperator},
-    tacky::{self, FunctionDefiniton, Instruction, Program, Value, Var},
-    unique_id,
-};
+use rrbc_parser::ast;
+use rrbc_parser::ast::BinaryOperator;
+
+use rrbc_tacky as tacky;
+use rrbc_tacky::{self, FunctionDefiniton, Instruction, Program, Value, Var};
+
+use rrbc_utils::unique_id;
 
 pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value) {
     match expr {
@@ -60,7 +62,9 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
             let dst_name = unique_id::temp_variable_name();
             let dst = Value::Var(Var(dst_name.clone()));
             instructions.append(&mut vec![Instruction::Binary {
-                op: op.to_tacky(),
+                op: op
+                    .try_into()
+                    .expect("logical operators are already handled"),
                 lhs,
                 rhs: rhs_expr.1,
                 dst: Var(dst_name),
@@ -81,7 +85,7 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
                     }
                     op => {
                         instructions.append(&mut vec![Instruction::Binary {
-                            op: op.to_tacky(),
+                            op: op.try_into().expect("None is already handled"),
                             lhs: Value::Var(Var(v.clone())),
                             rhs: value,
                             dst: Var(v.clone()),
@@ -127,7 +131,9 @@ pub fn emit_tacky_expression(expr: ast::Expression) -> (Vec<Instruction>, Value)
             let dst_name = unique_id::temp_variable_name();
             let dst = Value::Var(Var(dst_name.clone()));
             inner_ins.append(&mut vec![Instruction::Unary {
-                operator: op.to_tacky(),
+                operator: op
+                    .try_into()
+                    .expect("Increment and Decrement are already handled"),
                 src: val,
                 dst: Var(dst_name.clone()),
             }]);
@@ -470,7 +476,8 @@ pub fn emit_tacky_program(program: ast::Program) -> Program {
 
 #[cfg(test)]
 mod tests {
-    use crate::{lexer::Lexer, parser::Parser};
+
+    use rrbc_parser::{lexer::Lexer, Parser};
 
     use super::*;
 

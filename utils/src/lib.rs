@@ -1,3 +1,5 @@
+pub mod unique_id;
+
 pub trait ResultOk<T, E> {
     fn ok(self) -> Result<Option<T>, E>;
 }

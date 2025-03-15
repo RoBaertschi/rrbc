@@ -2,10 +2,8 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::{
-    ast::{Block, BlockItem, FunctionDeclaration, Program, Statement},
-    unique_id,
-};
+use rrbc_parser::ast::{Block, BlockItem, FunctionDeclaration, Program, Statement};
+use rrbc_utils::unique_id;
 
 type LabelMap = HashMap<String, String>;
 

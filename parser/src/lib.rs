@@ -1,14 +1,15 @@
+pub mod ast;
+pub mod lexer;
+
 use std::{
     collections::HashMap,
     mem::{self, Discriminant},
 };
 
+use ast::BinaryOperator;
 use thiserror::Error;
 
-use crate::{
-    ast::{self, BinaryOperator},
-    lexer::{Lexer, LexerError, Loc, Token, TokenKind},
-};
+use crate::lexer::{Lexer, LexerError, Loc, Token, TokenKind};
 
 #[derive(PartialEq, PartialOrd)]
 enum Precedence {

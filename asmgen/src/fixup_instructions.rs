@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{
-    assembly::{BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register},
-    utils,
-};
+use rrbc_asm::{BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register};
 
-pub fn run_third_pass(program: Program, stack_offset: HashMap<String, i64>) -> Program {
+use rrbc_utils;
+
+pub fn fixup_program(program: Program, stack_offset: HashMap<String, i64>) -> Program {
     Program(
         program
             .0
@@ -24,9 +23,12 @@ fn fixup_function(func: FunctionDefinition, stack_offset: i64) -> FunctionDefini
     let mut new_instructions = if stack_offset != 0 {
         vec![Instruction::AllocateStack(
             // TODO(Robin): Fix this one day correctly
-            utils::round_away_from_zero(16, stack_bytes)
+            // NOTE(Robin): 05.03.2025 past robin, wtf did you mean by that
+            rrbc_utils::round_away_from_zero(16, stack_bytes)
                 .try_into()
-                .unwrap_or_else(|_err| (-stack_bytes).try_into().unwrap_or(0)),
+                .expect("stack_bytes is invalid usize"), //rrbc_utils::round_away_from_zero(16, stack_bytes)
+                                                         //    .try_into()
+                                                         //    .unwrap_or_else(|_err| (-stack_bytes).try_into().unwrap_or(0)),
         )]
     } else {
         vec![]
@@ -49,10 +51,10 @@ fn fixup_instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                 (Operand::Stack(val1), Operand::Stack(val2)) => {
                     new_instructions.push(Instruction::Mov {
                         src: Operand::Stack(val1),
-                        dst: Operand::Register(crate::assembly::Register::R10),
+                        dst: Operand::Register(Register::R10),
                     });
                     new_instructions.push(Instruction::Mov {
-                        src: Operand::Register(crate::assembly::Register::R10),
+                        src: Operand::Register(Register::R10),
                         dst: Operand::Stack(val2),
                     });
                 }
