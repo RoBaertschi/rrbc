@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::assembly::{
-    BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register,
-};
+use rrbc_asm::{BinaryOperator, FunctionDefinition, Instruction, Operand, Program, Register};
 
 use rrbc_utils;
 
@@ -53,10 +51,10 @@ fn fixup_instructions(instructions: Vec<Instruction>) -> Vec<Instruction> {
                 (Operand::Stack(val1), Operand::Stack(val2)) => {
                     new_instructions.push(Instruction::Mov {
                         src: Operand::Stack(val1),
-                        dst: Operand::Register(crate::assembly::Register::R10),
+                        dst: Operand::Register(Register::R10),
                     });
                     new_instructions.push(Instruction::Mov {
-                        src: Operand::Register(crate::assembly::Register::R10),
+                        src: Operand::Register(Register::R10),
                         dst: Operand::Stack(val2),
                     });
                 }
