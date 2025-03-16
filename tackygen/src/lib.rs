@@ -464,7 +464,7 @@ pub fn emit_tacky_function(func: ast::FunctionDeclaration) -> Option<FunctionDef
 pub fn emit_tacky_program(program: ast::Program) -> Program {
     let mut funcs = vec![];
 
-    for func in program.function_declarations {
+    for func in program.declarations {
         let func = emit_tacky_function(func);
         if let Some(func) = func {
             funcs.push(func);
