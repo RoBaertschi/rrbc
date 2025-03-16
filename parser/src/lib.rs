@@ -6,7 +6,8 @@ use std::{
     mem::{self, Discriminant},
 };
 
-use ast::BinaryOperator;
+use ast::{BinaryOperator, StorageClass};
+use rrbc_utils::ResultOk;
 use thiserror::Error;
 
 use crate::lexer::{Lexer, LexerError, Loc, Token, TokenKind};
@@ -27,6 +28,7 @@ enum Precedence {
     Sum,
     Product,
     Prefix,
+    Postfix,
 }
 
 impl Precedence {
@@ -60,31 +62,39 @@ impl Precedence {
             | TokenKind::BitwiseShiftLeftAssign
             | TokenKind::BitwiseShiftRightAssign => Self::Assignment,
             TokenKind::QuestionMark => Self::Conditional,
+            TokenKind::Increment | TokenKind::Decrement => Self::Postfix,
             _ => return None,
         })
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Error, Debug)]
 pub enum ParserError {
     #[error("{0}")]
     LexerError(#[from] LexerError),
     #[error("Unexpected Token, expected: \"{expected:?}\", actual: \"{actual:?}\"")]
-    UnexpectedToken {
-        expected: TokenKind,
-        actual: TokenKind,
-    },
+    UnexpectedToken { expected: TokenKind, actual: Token },
     #[error("Unexpected Token, expected one of: {expected:?}, actual: \"{actual:?}\"")]
     UnexpectedTokens {
         expected: Vec<TokenKind>,
-        actual: TokenKind,
+        actual: Token,
     },
-    #[error("Expected an '=' or ';' after a variable declaration. Got \"{0:?}\"")]
-    DeclarationExpectedAssignOrSemicolon(TokenKind),
+    #[error("Expected an '(', '=' or ';' after a declaration. Got \"{0:?}\"")]
+    DeclarationExpectedAssignOrSemicolon(Token),
     #[error("Expected a list of parameters, got \"{0:?}\"")]
-    ExpectedParamList(TokenKind),
+    ExpectedParamList(Token),
     #[error("Could not find a prefix function for \"{0:?}\".")]
-    NoPrefixFunction(TokenKind),
+    NoPrefixFunction(Token),
+    #[error("Token \"{0:?}\" is not a valid storage class specifier.")]
+    InvalidStorageClass(TokenKind),
+    #[error("There are incompatible storage classes")]
+    IncompatibleStorageClasses,
+    #[error("There are to many Types for the declaration")]
+    ToManyTypes,
+    #[error("There is a Type missing from the declaration")]
+    MissingType,
+    #[error("The declaration in a for loop can only be a variable declaration.")]
+    ForInitNonVariableDecl,
 }
 
 type PrefixFunction = fn(&mut Parser) -> Result<ast::Expression, ParserError>;
@@ -190,9 +200,9 @@ impl Parser {
         Ok(parser)
     }
 
-    fn next_token(&mut self) -> Result<(), LexerError> {
-        self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token()?);
-        Ok(())
+    fn next_token(&mut self) -> Result<Token, LexerError> {
+        let old_peek_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token()?);
+        Ok(std::mem::replace(&mut self.cur_token, old_peek_token))
     }
 
     fn register_prefix(&mut self, token: &TokenKind, func: PrefixFunction) {
@@ -214,7 +224,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected,
-                actual: self.cur_token.kind.clone(),
+                actual: self.cur_token.clone(),
             })
         }
     }
@@ -226,7 +236,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected,
-                actual: self.peek_token.kind.clone(),
+                actual: self.peek_token.clone(),
             })
         }
     }
@@ -248,35 +258,23 @@ impl Parser {
     }
 
     pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
-        let mut funcs = vec![];
+        let mut decls = vec![];
 
         while !self.cur_token_is(TokenKind::Eof) {
-            funcs.push(self.parse_function_declaration_full()?);
+            decls.push(self.parse_declaration()?);
             self.next_token()?;
         }
 
         Ok(ast::Program {
-            function_declarations: funcs,
+            declarations: decls,
         })
-    }
-
-    fn parse_function_declaration_full(&mut self) -> Result<ast::FunctionDeclaration, ParserError> {
-        self.next_token()?;
-        if let TokenKind::Identifier(name) = self.cur_token.kind.clone() {
-            self.expect_peek(TokenKind::OpenParen)?;
-            self.parse_function_declaration(name)
-        } else {
-            Err(ParserError::UnexpectedToken {
-                expected: TokenKind::Identifier(String::new()),
-                actual: self.cur_token.kind.clone(),
-            })
-        }
     }
 
     // Expects to be on (
     fn parse_function_declaration(
         &mut self,
         identifier: String,
+        storage_class: Option<StorageClass>,
     ) -> Result<ast::FunctionDeclaration, ParserError> {
         self.expect(TokenKind::OpenParen)?;
         self.next_token()?;
@@ -288,10 +286,10 @@ impl Parser {
         let block = match &self.cur_token.kind {
             TokenKind::Semicolon => None,
             TokenKind::OpenBrace => Some(self.parse_block()?),
-            tok => {
+            _ => {
                 return Err(ParserError::UnexpectedTokens {
                     expected: vec![TokenKind::Semicolon, TokenKind::OpenBrace],
-                    actual: tok.clone(),
+                    actual: self.cur_token.clone(),
                 })
             }
         };
@@ -300,26 +298,8 @@ impl Parser {
             name: identifier,
             body: block,
             params,
+            storage_class,
         })
-    }
-
-    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
-        match &self.cur_token.kind {
-            TokenKind::KWInt => Ok(ast::BlockItem::D(self.parse_declaration()?)),
-            _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
-        }
-    }
-
-    fn parse_block(&mut self) -> Result<ast::Block, ParserError> {
-        let mut body: Vec<ast::BlockItem> = vec![];
-        while !self.peek_token_is(TokenKind::CloseBrace) {
-            self.next_token()?;
-            body.push(self.parse_block_item()?);
-        }
-        self.next_token()?; // Eat CloseBrace
-                            // }
-                            // ^
-        Ok(ast::Block(body))
     }
 
     fn parse_param_list(&mut self) -> Result<Vec<ast::Identifier>, ParserError> {
@@ -344,62 +324,76 @@ impl Parser {
                             self.expect_peek(TokenKind::KWInt)?;
                         }
                         TokenKind::CloseParen => {}
-                        tok => {
+                        _ => {
                             return Err(ParserError::UnexpectedTokens {
                                 expected: vec![TokenKind::CloseParen, TokenKind::Comma],
-                                actual: tok.clone(),
+                                actual: self.cur_token.clone(),
                             })
                         }
                     };
                 }
                 Ok(params)
             }
-            tok => Err(ParserError::ExpectedParamList(tok.clone())),
+            _ => Err(ParserError::ExpectedParamList(self.cur_token.clone())),
         }
     }
 
-    fn parse_variable_declaration_full(&mut self) -> Result<ast::VariableDeclaration, ParserError> {
-        self.expect(TokenKind::KWInt)?;
-        self.next_token()?;
-        if let TokenKind::Identifier(ident) = self.cur_token.kind.clone() {
-            self.next_token()?;
-            self.parse_variable_declaration(ident)
-        } else {
-            Err(ParserError::UnexpectedToken {
-                expected: TokenKind::Identifier(String::new()),
-                actual: self.cur_token.kind.clone(),
-            })
-        }
+    fn cur_is_specifier(&self) -> bool {
+        matches!(
+            self.cur_token.kind,
+            TokenKind::KWExtern | TokenKind::KWInt | TokenKind::KWStatic
+        )
     }
+    fn parse_type_and_storage_class(
+        specifier_list: Vec<TokenKind>,
+    ) -> Result<(TokenKind, Option<StorageClass>), ParserError> {
+        let mut storage_classes = vec![];
+        let mut types = vec![];
 
-    fn parse_variable_declaration(
-        &mut self,
-        identifier: String,
-    ) -> Result<ast::VariableDeclaration, ParserError> {
-        match &self.cur_token.kind {
-            TokenKind::Semicolon => Ok(ast::VariableDeclaration {
-                name: identifier,
-                exp: None,
-            }),
-            TokenKind::Assign => {
-                self.next_token()?;
-                let expr = self.parse_expression(self.cur_precedence())?;
-                self.expect_peek(TokenKind::Semicolon)?;
-                Ok(ast::VariableDeclaration {
-                    name: identifier,
-                    exp: Some(expr),
-                })
+        for specifier in specifier_list {
+            match specifier {
+                TokenKind::KWInt => types.push(specifier),
+                _ => storage_classes.push(specifier),
             }
-            tok => Err(ParserError::UnexpectedTokens {
-                expected: vec![TokenKind::Semicolon, TokenKind::Assign],
-                actual: tok.clone(),
-            }),
         }
+
+        if types.len() > 1 {
+            return Err(ParserError::ToManyTypes);
+        }
+        // Move the first element to the end
+        let t = match types.pop() {
+            Some(v) => v,
+            None => return Err(ParserError::MissingType),
+        };
+
+        if storage_classes.len() > 1 {
+            return Err(ParserError::IncompatibleStorageClasses);
+        }
+
+        return Ok((
+            t,
+            storage_classes
+                .get(0)
+                .map(|v| {
+                    Ok(match v {
+                        TokenKind::KWExtern => StorageClass::Extern,
+                        TokenKind::KWStatic => StorageClass::Static,
+                        _ => return Err(ParserError::InvalidStorageClass(v.clone())),
+                    })
+                })
+                .ok()?,
+        ));
     }
 
     // WARN: This will parse a semicolon!
     fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
-        self.next_token()?;
+        let mut specifiers = vec![];
+
+        while self.cur_is_specifier() {
+            specifiers.push(self.next_token()?.kind);
+        }
+
+        let (_, storage_class) = Self::parse_type_and_storage_class(specifiers)?;
 
         if let TokenKind::Identifier(ident) = self.cur_token.kind.clone() {
             self.next_token()?;
@@ -407,6 +401,7 @@ impl Parser {
                 TokenKind::Semicolon => Ok(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: ident,
                     exp: None,
+                    storage_class,
                 })),
                 TokenKind::Assign => {
                     self.next_token()?;
@@ -415,21 +410,44 @@ impl Parser {
                     Ok(ast::Declaration::VarDecl(ast::VariableDeclaration {
                         name: ident,
                         exp: Some(expr),
+                        storage_class,
                     }))
                 }
                 TokenKind::OpenParen => self
-                    .parse_function_declaration(ident)
+                    .parse_function_declaration(ident, storage_class)
                     .map(ast::Declaration::FunDecl),
-                tok => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
-                    tok.clone(),
+
+                _ => Err(ParserError::DeclarationExpectedAssignOrSemicolon(
+                    self.cur_token.clone(),
                 )),
             }
         } else {
             Err(ParserError::UnexpectedToken {
                 expected: TokenKind::Identifier(String::new()),
-                actual: self.cur_token.kind.clone(),
+                actual: self.cur_token.clone(),
             })
         }
+    }
+
+    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
+        match &self.cur_token.kind {
+            TokenKind::KWInt | TokenKind::KWStatic | TokenKind::KWExtern => {
+                Ok(ast::BlockItem::D(self.parse_declaration()?))
+            }
+            _ => Ok(ast::BlockItem::S(self.parse_statement()?)),
+        }
+    }
+
+    fn parse_block(&mut self) -> Result<ast::Block, ParserError> {
+        let mut body: Vec<ast::BlockItem> = vec![];
+        while !self.peek_token_is(TokenKind::CloseBrace) {
+            self.next_token()?;
+            body.push(self.parse_block_item()?);
+        }
+        self.next_token()?; // Eat CloseBrace
+                            // }
+                            // ^
+        Ok(ast::Block(body))
     }
 
     // Statements
@@ -494,9 +512,15 @@ impl Parser {
     fn parse_for_init(&mut self) -> Result<ast::ForInit, ParserError> {
         match self.cur_token.kind {
             TokenKind::Semicolon => Ok(ast::ForInit::None),
-            TokenKind::KWInt => {
-                let decl = self.parse_variable_declaration_full()?;
-                Ok(ast::ForInit::InitDecl(decl))
+            TokenKind::KWInt | TokenKind::KWExtern | TokenKind::KWStatic => {
+                let variable_declaration = match self.parse_declaration()? {
+                    ast::Declaration::FunDecl(_) => {
+                        return Err(ParserError::ForInitNonVariableDecl)
+                    }
+                    ast::Declaration::VarDecl(decl) => decl,
+                };
+
+                Ok(ast::ForInit::InitDecl(variable_declaration))
             }
             _ => {
                 let expr = self.parse_expression(Precedence::Lowest)?;
@@ -571,7 +595,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected: TokenKind::Identifier(String::new()),
-                actual: self.peek_token.kind.clone(),
+                actual: self.peek_token.clone(),
             })
         }
     }
@@ -650,22 +674,34 @@ impl Parser {
                     && precedence < self.peek_precedence()
                 {
                     if self
+                        .postfix_functions
+                        .contains_key(&mem::discriminant(&self.peek_token.kind))
+                    {
+                        self.next_token()?;
+
+                        left_exp = self.postfix_functions
+                            [&mem::discriminant(&self.cur_token.kind)](
+                            self, left_exp
+                        )?;
+                        continue;
+                    }
+
+                    if self
                         .infix_functions
                         .contains_key(&mem::discriminant(&self.peek_token.kind))
                     {
                         self.next_token()?;
-                        left_exp = self
-                            .infix_functions
-                            .get(&mem::discriminant(&self.cur_token.kind))
-                            .unwrap()(self, left_exp)?;
+                        left_exp = self.infix_functions[&mem::discriminant(&self.cur_token.kind)](
+                            self, left_exp,
+                        )?;
                     } else {
-                        return self.parse_expression_postfix(left_exp);
+                        return Ok(left_exp);
                     }
                 }
 
-                self.parse_expression_postfix(left_exp)
+                Ok(left_exp)
             }
-            None => Err(ParserError::NoPrefixFunction(self.cur_token.kind.clone())),
+            None => Err(ParserError::NoPrefixFunction(self.cur_token.clone())),
         }
     }
 
@@ -680,26 +716,6 @@ impl Parser {
             self.expect_peek(end)?;
             Ok(Some(expr))
         }
-    }
-
-    fn parse_expression_postfix(
-        &mut self,
-        mut left_exp: ast::Expression,
-    ) -> Result<ast::Expression, ParserError> {
-        while self
-            .postfix_functions
-            .contains_key(&mem::discriminant(&self.peek_token.kind))
-        {
-            self.next_token()?;
-            let postfix = self
-                .postfix_functions
-                .get(&mem::discriminant(&self.cur_token.kind));
-
-            if let Some(postfix) = postfix {
-                left_exp = postfix(self, left_exp)?;
-            }
-        }
-        Ok(left_exp)
     }
 
     fn parse_binary_expression(
@@ -791,7 +807,7 @@ impl Parser {
 
         Err(ParserError::UnexpectedToken {
             expected: TokenKind::Constant(0),
-            actual: self.cur_token.kind.clone(),
+            actual: self.cur_token.clone(),
         })
     }
 
@@ -831,7 +847,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken {
                 expected: TokenKind::Identifier(String::new()),
-                actual: self.cur_token.kind.clone(),
+                actual: self.cur_token.clone(),
             })
         }
     }
@@ -910,7 +926,23 @@ impl Parser {
 #[cfg(test)]
 mod tests {
 
+    use crate::ast::FunctionDeclaration;
+
     use super::*;
+
+    fn get_first_fun_decl(mut program: ast::Program) -> FunctionDeclaration {
+        match program.declarations.pop().unwrap() {
+            ast::Declaration::FunDecl(decl) => decl,
+            _ => panic!(),
+        }
+    }
+
+    fn get_first_fun_decl_body(mut program: ast::Program) -> Option<ast::Block> {
+        match program.declarations.pop().unwrap() {
+            ast::Declaration::FunDecl(decl) => decl.body,
+            _ => panic!(),
+        }
+    }
 
     #[test]
     fn test_declaration() {
@@ -922,15 +954,17 @@ mod tests {
         let program = parser.parse_program().expect("should successfully parse");
 
         assert_eq!(
-            program.function_declarations[0].body,
+            get_first_fun_decl_body(program),
             Some(ast::Block(vec![
                 ast::BlockItem::D(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: "a".to_owned(),
-                    exp: Some(ast::Expression::Var("hello".to_owned()))
+                    exp: Some(ast::Expression::Var("hello".to_owned())),
+                    storage_class: None,
                 })),
                 ast::BlockItem::D(ast::Declaration::VarDecl(ast::VariableDeclaration {
                     name: "b".to_owned(),
                     exp: None,
+                    storage_class: None,
                 })),
             ]))
         );
@@ -951,9 +985,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
         assert_eq!(
-            program.function_declarations[0].body,
+            decl.body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -982,9 +1017,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
         assert_eq!(
-            program.function_declarations[0].body,
+            decl.body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1016,9 +1052,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
         assert_eq!(
-            program.function_declarations[0].body,
+            decl.body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1054,9 +1091,10 @@ mod tests {
             .parse_program()
             .expect("the program should be parsed successfully");
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
         assert_eq!(
-            program.function_declarations[0].body,
+            decl.body,
             Some(ast::Block(vec![ast::BlockItem::S(ast::Statement::Return(
                 ast::Expression::Binary {
                     op: BinaryOperator::Multiply,
@@ -1104,8 +1142,9 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
-        assert_eq!(program.function_declarations[0].body, Some(expected_result));
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
+        assert_eq!(decl.body, Some(expected_result));
     }
 
     #[test]
@@ -1143,7 +1182,8 @@ mod tests {
             },
         ))]);
 
-        assert_eq!(program.function_declarations[0].name, "main".to_owned());
-        assert_eq!(program.function_declarations[0].body, Some(expected_result));
+        let decl = get_first_fun_decl(program);
+        assert_eq!(decl.name, "main".to_owned());
+        assert_eq!(decl.body, Some(expected_result));
     }
 }

@@ -5,6 +5,7 @@ test_compiler := "./.tests/writing-a-c-compiler-tests/test_compiler"
 
 exists := if path_exists(wacc-tests) == "false" { "just download-tests" } else { "echo Tests already downloaded" }
 
+features := ""
 
 default: test
 
@@ -16,7 +17,7 @@ clean-tests:
     rm -rf .tests
 
 build:
-    cargo build
+    cargo build --no-default-features {{features}}
 
 clean: clean-tests
     cargo clean
@@ -41,3 +42,35 @@ test *EXTRA="--extra-credit":
 simple:
     cargo r -- simple.c
     ./simple
+
+parse_simple:
+    cargo r --no-default-features -- simple.c --parse
+
+parser_tests:
+    cargo t --no-default-features -p rrbc-parser
+
+validate_simple:
+    cargo r --no-default-features --features validate -- simple.c --validate
+
+validate_tests:
+    cargo t -p rrbc-semantic-analysis
+
+
+tackygen_simple:
+    cargo r --no-default-features --features tackygen -- simple.c --tacky
+
+tackygen_tests:
+    cargo t -p rrbc-tackygen
+
+asmgen_simple:
+    cargo r --no-default-features --features asmgen -- simple.c -S
+
+asmgen_tests:
+    cargo t -p rrbc-asmgen
+
+
+emit_simple:
+    cargo r -- simple.c
+
+emit_tests:
+    cargo t --workspace
