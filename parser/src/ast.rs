@@ -140,9 +140,16 @@ pub enum Declaration {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+pub enum StorageClass {
+    Static,
+    Extern,
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct VariableDeclaration {
     pub name: Identifier,
     pub exp: Option<Expression>,
+    pub storage_class: Option<StorageClass>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -159,9 +166,10 @@ pub struct FunctionDeclaration {
     pub name: Identifier,
     pub params: Vec<Identifier>,
     pub body: Option<Block>,
+    pub storage_class: Option<StorageClass>,
 }
 
 #[derive(Debug)]
 pub struct Program {
-    pub function_declarations: Vec<FunctionDeclaration>,
+    pub declarations: Vec<Declaration>,
 }
