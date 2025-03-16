@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use rrbc_parser::ast::{
     Block, BlockItem, Declaration, Expression, ForInit, FunctionDeclaration, Identifier, Program,
-    Statement, UnaryOperator, VariableDeclaration,
+    Statement, StorageClass, UnaryOperator, VariableDeclaration,
 };
 use rrbc_utils::unique_id;
 
@@ -24,13 +24,15 @@ pub enum IdentifierResolutionError {
     VariableNameRedeclaration(String),
     #[error("Invalid assignment on non lvalue {0:?}")]
     InvalidLvalue(Expression),
+    #[error("Conflicting local declarations")]
+    ConflictingDeclarations,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 struct IdentifierMapEntry {
     new_name: String,
     from_current_scope: bool,
-    external_linkage: bool,
+    has_linkage: bool,
 }
 type IdentifierMap = HashMap<String, IdentifierMapEntry>;
 
@@ -49,7 +51,7 @@ pub fn resolve_program(program: Program) -> Result<Program, IdentifierResolution
     let mut new_funcs = vec![];
 
     for func in program.declarations {
-        new_funcs.push(resolve_function_declaration(&mut identifier_map, func)?);
+        new_funcs.push(resolve_file_scope_declaration(&mut identifier_map, func)?);
     }
 
     Ok(Program {
@@ -57,12 +59,42 @@ pub fn resolve_program(program: Program) -> Result<Program, IdentifierResolution
     })
 }
 
+fn resolve_file_scope_declaration(
+    identifier_map: &mut IdentifierMap,
+    declaration: Declaration,
+) -> Result<Declaration, IdentifierResolutionError> {
+    Ok(match declaration {
+        Declaration::FunDecl(function_declaration) => Declaration::FunDecl(
+            resolve_function_declaration(identifier_map, function_declaration)?,
+        ),
+        Declaration::VarDecl(variable_declaration) => Declaration::VarDecl(
+            resolve_file_scope_variable_declaration(identifier_map, variable_declaration)?,
+        ),
+    })
+}
+
+fn resolve_file_scope_variable_declaration(
+    identifier_map: &mut IdentifierMap,
+    variable_declaration: VariableDeclaration,
+) -> Result<VariableDeclaration, IdentifierResolutionError> {
+    identifier_map.insert(
+        variable_declaration.name.clone(),
+        IdentifierMapEntry {
+            new_name: variable_declaration.name.clone(),
+            from_current_scope: true,
+            has_linkage: true,
+        },
+    );
+
+    Ok(variable_declaration)
+}
+
 fn resolve_function_declaration(
     identifier_map: &mut IdentifierMap,
     function_declaration: FunctionDeclaration,
 ) -> Result<FunctionDeclaration, IdentifierResolutionError> {
     match identifier_map.get(&function_declaration.name) {
-        Some(entry) if entry.from_current_scope && !entry.external_linkage => {
+        Some(entry) if entry.from_current_scope && !entry.has_linkage => {
             return Err(IdentifierResolutionError::FunctionNameRedeclaration(
                 function_declaration.name.clone(),
             ))
@@ -75,7 +107,7 @@ fn resolve_function_declaration(
         IdentifierMapEntry {
             new_name: function_declaration.name.clone(),
             from_current_scope: true,
-            external_linkage: true,
+            has_linkage: true,
         },
     );
 
@@ -93,6 +125,7 @@ fn resolve_function_declaration(
             Some(block) => Some(resolve_block(&mut new_scope, block)?),
             None => None,
         },
+        storage_class: function_declaration.storage_class,
     })
 }
 
@@ -112,7 +145,7 @@ fn resolve_variable_like(
         IdentifierMapEntry {
             new_name: unique_name.clone(),
             from_current_scope: true,
-            external_linkage: false,
+            has_linkage: false,
         },
     );
 
@@ -155,15 +188,36 @@ fn resolve_declaration(
             resolve_function_declaration(identifier_map, function_declaration)?,
         ),
         Declaration::VarDecl(variable_declaration) => Declaration::VarDecl(
-            resolve_variable_declaration(identifier_map, variable_declaration)?,
+            resolve_local_variable_declaration(identifier_map, variable_declaration)?,
         ),
     })
 }
 
-fn resolve_variable_declaration(
+fn resolve_local_variable_declaration(
     identifier_map: &mut IdentifierMap,
     decl: VariableDeclaration,
 ) -> Result<VariableDeclaration, IdentifierResolutionError> {
+    if let Some(prev_entry) = identifier_map.get(&decl.name) {
+        if prev_entry.from_current_scope {
+            if !(prev_entry.has_linkage && matches!(decl.storage_class, Some(StorageClass::Extern)))
+            {
+                return Err(IdentifierResolutionError::ConflictingDeclarations);
+            }
+        }
+    }
+
+    if let Some(StorageClass::Extern) = decl.storage_class {
+        identifier_map.insert(
+            decl.name.clone(),
+            IdentifierMapEntry {
+                new_name: decl.name.clone(),
+                from_current_scope: true,
+                has_linkage: true,
+            },
+        );
+        return Ok(decl);
+    }
+
     let unique_name = resolve_variable_like(identifier_map, decl.name)?;
 
     let expr = if let Some(expr) = decl.exp {
@@ -175,6 +229,7 @@ fn resolve_variable_declaration(
     Ok(VariableDeclaration {
         name: unique_name,
         exp: expr,
+        storage_class: decl.storage_class,
     })
 }
 
@@ -284,10 +339,9 @@ fn resolve_for_init(
     init: ForInit,
 ) -> Result<ForInit, IdentifierResolutionError> {
     match init {
-        ForInit::InitDecl(declaration) => Ok(ForInit::InitDecl(resolve_variable_declaration(
-            identifier_map,
-            declaration,
-        )?)),
+        ForInit::InitDecl(declaration) => Ok(ForInit::InitDecl(
+            resolve_local_variable_declaration(identifier_map, declaration)?,
+        )),
         ForInit::InitExp(expression) => Ok(ForInit::InitExp(resolve_expression(
             identifier_map,
             expression,
